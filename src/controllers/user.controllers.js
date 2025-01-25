@@ -41,7 +41,6 @@ const generateTokens = async (userId) => {
     }
 };
 
-
 const registerUser = asyncHandler( async (req, res) => {
     // Get data from request body
     console.log(req.body)
@@ -80,7 +79,6 @@ const registerUser = asyncHandler( async (req, res) => {
 
 });
 
-// request as www-form-urlencoded
 const loginUser = asyncHandler( async (req, res) => {
     const { username, email, password } = req.body;
 
