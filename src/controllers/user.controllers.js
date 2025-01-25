@@ -380,4 +380,16 @@ const updatePassword = asyncHandler( async (req, res) => {
 
 });
 
-export { registerUser, loginUser, logout, tokenUpdate, currentUser, verifyUser, resendOtp, updateName, updatePhone, updateAvatar, updatePassword };
+const sendForgetPassword = asyncHandler( async (req, res) => {
+
+});
+
+const checkExpiryForget = asyncHandler( async (req, res) => {
+    
+});
+
+const forgetPassword = asyncHandler( async (req, res) => {
+   
+});
+
+export { registerUser, loginUser, logout, tokenUpdate, currentUser, verifyUser, resendOtp, updateName, updatePhone, updateAvatar, updatePassword,forgetPassword, sendForgetPassword, checkExpiryForget };
