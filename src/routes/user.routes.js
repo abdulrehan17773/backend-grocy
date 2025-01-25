@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { registerUser, loginUser, logout, tokenUpdate, currentUser, verifyUser, resendOtp } from "../controllers/user.controllers.js";
+import { registerUser, loginUser, logout, tokenUpdate, currentUser, verifyUser, resendOtp, updatePhone, updateName } from "../controllers/user.controllers.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import {checkAuth} from "../middlewares/checkAuth.middleware.js"
 
@@ -16,5 +16,7 @@ UserRouter.route("/resend-otp").post(resendOtp);
 UserRouter.use(checkAuth);
 UserRouter.route("/logout").post(logout);
 UserRouter.route("/current-user").get(currentUser);
+UserRouter.route("/update-name").patch(updateName);
+UserRouter.route("/update-phone").patch(updatePhone);
 
 export { UserRouter };  

@@ -265,6 +265,49 @@ const resendOtp = asyncHandler( async (req, res) => {
     )
 });
 
+const updateName = asyncHandler( async (req, res) => {
+    const {fullname} = req.body;
+    const user = req.user;
+    if(!fullname){
+        res.status(400);
+        throw new ApiError(400, "Enter your name");
+    } 
+
+    if(user.fullname === fullname){
+        res.status(400);
+        throw new ApiError(400, "Please enter different name");
+    }
+
+    user.fullname = fullname;
+    await user.save({validateBeforeSave: false})
+
+    return res.status(200).json(
+        new ApiResponse(200, user, "Name updated successfully")
+    )
+
+});
+
+const updatePhone = asyncHandler( async (req, res) => {
+    const {phone} = req.body;
+    const user = req.user;
+    if(!phone){
+        res.status(400);
+        throw new ApiError(400, "Enter your Phone");
+    } 
+
+    if(user.phone === phone){
+        res.status(400);
+        throw new ApiError(400, "Please enter different phone");
+    }
+
+    user.phone = phone;
+    await user.save({validateBeforeSave: false})
+
+    return res.status(200).json(
+        new ApiResponse(200, user, "Phone updated successfully")
+    )
+
+});
 
 
-export { registerUser, loginUser, logout, tokenUpdate, currentUser, verifyUser, resendOtp};
+export { registerUser, loginUser, logout, tokenUpdate, currentUser, verifyUser, resendOtp, updateName, updatePhone };
