@@ -44,10 +44,11 @@ const generateTokens = async (userId) => {
 
 const registerUser = asyncHandler( async (req, res) => {
     // Get data from request body
-    const { fullname,username, email, password } = req.body;
+    console.log(req.body)
+    const { fullname,phone, email, password } = req.body;
 
     // Check if any of the fields are empty
-    if ([fullname, email,username, password].some(field => !field || field.trim() === "")) {
+    if ([fullname, email,phone, password].some(field => !field || field.trim() === "")) {
         throw new ApiError(400, "All fields are required");
     }
 
@@ -62,17 +63,8 @@ const registerUser = asyncHandler( async (req, res) => {
         throw new ApiError(409, "User already exists");
     }
 
-    // handle tem image
-    let avatarPath;
-    if(req.file){
-        avatarPath = req.file.path;
-    }
-
-    // upload image on cloudinary 
-    const avatar = await handleUploadFile(avatarPath);
-
     // create new user
-    const createUser = await User.create({fullname, username, email: email.toLowerCase(), password, avatar: avatar?.url || 'logo.png', uid});
+    const createUser = await User.create({uid, fullname, phone, email: email.toLowerCase(), password});
 
     // check user created successfully ans remove extra data
     const userCreated = await User.findById(createUser._id).select("-password -refreshToken -__v -createdAt -updatedAt -deletedAt -otp -otp_time");

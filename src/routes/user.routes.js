@@ -6,11 +6,12 @@ import {checkAuth} from "../middlewares/checkAuth.middleware.js"
 const UserRouter = Router();
 
 // // unsecure routes
-UserRouter.route("/register").post(upload.single('avatar'), registerUser);
+UserRouter.route("/register").post(registerUser);
 UserRouter.route("/login").post(loginUser);
 
 // secure routes
-UserRouter.route("/logout").post(checkAuth ,logout);
 UserRouter.route("/refresh-token").post(tokenUpdate);
+UserRouter.use(checkAuth);
+UserRouter.route("/logout").post(logout);
 
 export { UserRouter };  
