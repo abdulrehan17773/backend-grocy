@@ -38,7 +38,20 @@ const handleUploadFile = async (filePath) => {
     } 
 }
 
-export {handleUploadFile}
+const deleteFileFromCloudinary = async (publicId) => {
+    
+    try {
+        const publicUrl = publicId.split('/').pop().split('.')[0];
+        // Delete the previous avatar from Cloudinary
+        await cloudinary.uploader.destroy(publicUrl);
+        return true;
+    } catch (err) {
+        return false;
+    }
+}
+
+
+export {handleUploadFile, deleteFileFromCloudinary}
 
 
 

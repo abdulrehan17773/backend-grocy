@@ -2,7 +2,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import  { User }  from "../models/user.models.js";
 import  { ApiError } from "../utils/ApiError.js";
 import ApiResponse from "../utils/ApiResponse.js";
-import { handleUploadFile } from "../utils/cloudinary.js";
+import { handleUploadFile, deleteFileFromCloudinary } from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
 
 
@@ -309,5 +309,51 @@ const updatePhone = asyncHandler( async (req, res) => {
 
 });
 
+const updateAvatar = asyncHandler( async (req, res) => {
+    const user = req.user;
+    const avatar = req.file;
+    const oldavatar = user.avatar;
+    if(!avatar){
+        res.status(400);
+        throw new ApiError(400, "Please upload an image");
+    }
+    
+    const uploadedavatar = await handleUploadFile(avatar.path);
 
-export { registerUser, loginUser, logout, tokenUpdate, currentUser, verifyUser, resendOtp, updateName, updatePhone };
+    if(!uploadedavatar){
+        res.status(500);
+        throw new ApiError(500, "Something went wrong");
+    }
+
+    user.avatar = uploadedavatar.url;
+    const updated = await user.save({validateBeforeSave: false})
+    
+    if(!updated){
+        res.status(500);
+        throw new ApiError(500, "Something went wrong");
+    }
+
+    if(oldavatar != "logo.png"){
+        
+        await deleteFileFromCloudinary(oldavatar);
+    }
+    
+    res.status(200).json(
+        new ApiResponse(200, user, "Avatar updated successfully")
+    )
+
+});
+
+const updatePassword = asyncHandler( async (req, res) => {
+    const {oldPassword, newPassword} = req.body;
+    const user = req.user;
+
+    if(oldPassword == newPassword){
+        res.status(400);
+        throw new ApiError(400, "Please enter different password");
+    }
+
+    
+});
+
+export { registerUser, loginUser, logout, tokenUpdate, currentUser, verifyUser, resendOtp, updateName, updatePhone, updateAvatar, updatePassword };
