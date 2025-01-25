@@ -9,13 +9,6 @@ const userSchema = new Schema({
         index: true,
         required: true
     },
-    username:{
-        type: String,
-        unique: true,
-        tolowercase: true,
-        trim: true,
-        default: null
-    },
     fullname: {
         type: String,
         required: true
@@ -27,13 +20,18 @@ const userSchema = new Schema({
         tolowercase: true,
         trim: true
     },
+    phone: {
+        type: Number,
+        required: true,
+        unique: true
+    },
     password:{
         type: String,
         required: true,
     },
     avatar: {
-        type: String, // cloudinary image url
-        default: "logo.png" // default image
+        type: String, 
+        default: "logo.png" 
     },
     verify: {
         type: Boolean,
@@ -59,24 +57,27 @@ const userSchema = new Schema({
 // just before saving the user, hash the password
 userSchema.pre("save", async function (next) {
 
+    if(this.isModified("password")){
+        // hash the password if password is modified
+        this.password = await bcrypt.hash(this.password, 10)
+    }
+    
     if (this.isNew) {    
-        // hash the password
-        this.password = await bcrypt.hash(this.password, 10);
-
         // generate uid for the user
-        const uniqueId = this._id + this.email;
-        const longUid  = await bcrypt.hash(uniqueId, 10);
-        this.uid = longUid.slice(7, 15);
+        const addFields = this.email + this.phone;
+        const uniqueId  = await bcrypt.hash(addFields, 10);
+        this.uid = uniqueId.slice(7, 15);
 
         // generate otp for the user
         const otp = Math.floor(100000 + Math.random() * 900000);
-        this.otp = otp;
-        
+    
         // set otp time for the user
-        this.otp_time = Date.now() + 1000;
+        const otp_time = Date.now() + 1000;
+
+        this.otp = otp;
+        this.otp_time = otp_time;
     }
     next();
-
 })
 
 // compare password method
@@ -87,6 +88,19 @@ userSchema.methods.comparePassword = async function (password) {
 
 }
 
+
+// generate otp and set otp time
+userSchema.methods.defineOtp = async function () {
+
+    // generate otp for the user
+    const otp = Math.floor(100000 + Math.random() * 900000);
+    
+    // set otp time for the user
+    const otp_time = Date.now() + 1000;
+
+    return {otp, otp_time};
+}
+
 // generate jwt access token here
 userSchema.methods.generateAccessToken = function () {
 
@@ -95,7 +109,7 @@ userSchema.methods.generateAccessToken = function () {
         {
             _id: this._id,
             uid: this.uid,
-            username: this.username,
+            fullname: this.phone,
             email: this.email,
         },
             process.env.ACCESS_TOKEN_STRING,
