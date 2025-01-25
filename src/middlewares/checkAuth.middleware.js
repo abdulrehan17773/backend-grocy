@@ -16,7 +16,7 @@ const checkAuth = asyncHandler( async(req, _, next) => {
     const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_STRING)
 
     // get user
-    const user = await User.findById(decoded._id)
+    const user = await User.findById(decoded._id).select("-password -refreshToken -__v -createdAt -updatedAt -deletedAt -otp -otp_time");
 
     if(!user){
         throw new ApiError(401, "Unauthorized");

@@ -43,7 +43,6 @@ const generateTokens = async (userId) => {
 
 const registerUser = asyncHandler( async (req, res) => {
     // Get data from request body
-    console.log(req.body)
     const { fullname,phone, email, password } = req.body;
 
     // Check if any of the fields are empty
@@ -80,16 +79,16 @@ const registerUser = asyncHandler( async (req, res) => {
 });
 
 const loginUser = asyncHandler( async (req, res) => {
-    const { username, email, password } = req.body;
+    const { email, password } = req.body;
 
     // check if username or email is provided
-    if (!username && !email) {
+    if (!email) {
         res.status(400);
-        throw new ApiError(400, "Username or email is required");
+        throw new ApiError(400, "email is required");
     }
 
     // find user
-    const userExists = await User.findOne({ $or: [{ username }, { email }] });
+    const userExists = await User.findOne({ email });
 
     // check if user exists
     if (!userExists) {
@@ -128,8 +127,8 @@ const logout = asyncHandler( async (req, res) => {
     User.findByIdAndUpdate(
         req.user._id,
         {
-            $set: {
-                refreshToken: null
+            $unset: {
+                refreshToken: 1
             }
         },
         {
@@ -184,5 +183,60 @@ const tokenUpdate = asyncHandler( async (req, res) => {
 
 });
 
+const currentUser = asyncHandler( async (req, res) => {
+    const user = req.user;
 
-export { registerUser, loginUser, logout, tokenUpdate};
+    return res.status(200).json(
+        new ApiResponse(200, user, "User fetched successfully")
+    )
+});
+
+const verifyUser = asyncHandler( async (req, res) => {
+    const { otp, email } = req.body;
+
+    if(!otp, !email){
+        res.status(400);
+        throw new ApiError(400, "All fields are required");
+    }
+
+    const user = await User.findOne({email});
+
+    if(!user){
+        res.status(404);
+        throw new ApiError(404, "User not found");
+    }
+
+    const otpTime = user.otp_time;
+    const currentTime = Date.now();
+
+    if(currentTime > otpTime){
+        res.status(401);
+        throw new ApiError(401, "OTP expired");
+    }
+
+
+    if(user.otp != otp){
+        console.log(user.otp, otp)
+        res.status(401);
+        throw new ApiError(401, "Invalid otp");
+    }
+
+    user.otp = null;
+    user.otp_time = null;
+    user.verify = true;
+    await user.save({ validateBeforeSave: false });
+    
+    const updatedUser = await User.findOne({email}).select('-password -refreshToken -__v -createdAt -updatedAt -deletedAt -otp -otp_time');
+    
+    const {refreshToken, accessToken} = await generateTokens(user._id);
+    
+    return res.status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+        new ApiResponse(200, {updatedUser, accessToken, refreshToken }, "Token updated successfully")
+    )
+    
+});
+
+export { registerUser, loginUser, logout, tokenUpdate, currentUser, verifyUser};

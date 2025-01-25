@@ -72,7 +72,7 @@ userSchema.pre("save", async function (next) {
         const otp = Math.floor(100000 + Math.random() * 900000);
     
         // set otp time for the user
-        const otp_time = Date.now() + 1000;
+        const otp_time = Date.now() + (15 * 60 * 1000); // 15 minutes in milliseconds
 
         this.otp = otp;
         this.otp_time = otp_time;
