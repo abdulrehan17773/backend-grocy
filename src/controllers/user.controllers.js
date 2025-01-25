@@ -121,29 +121,27 @@ const loginUser = asyncHandler( async (req, res) => {
         );
 });
 
-const logout = asyncHandler( async (req, res) => {
-
-    // delete refreshtoken from database
-    User.findByIdAndUpdate(
+const logout = asyncHandler(async (req, res) => {
+    try {
+      const updatedUser = await User.findByIdAndUpdate(
         req.user._id,
-        {
-            $unset: {
-                refreshToken: 1
-            }
-        },
-        {
-            new: true
-        }
-    )
-
-    // delete refreshtoken from cookie
-    return res.status(200)
-    .clearCookie("refreshToken", null, options)
-    .clearCookie("accessToken", null, options)
-    .json(
-        new ApiResponse(200, null, "User logged out successfully")
-    )
-});
+        { $set: { refreshToken: null } },
+        { new: true }
+      );
+  
+      if (!updatedUser) {
+        return res.status(404).json(new ApiResponse(404, null, "User not found"));
+      }
+  
+      res.status(200)
+        .clearCookie("refreshToken", null, options)
+        .clearCookie("accessToken", null, options)
+        .json(new ApiResponse(200, null, "User logged out successfully"));
+    } catch (error) {
+      console.error("Logout error:", error);
+      res.status(500).json(new ApiResponse(500, null, "Failed to log out"));
+    }
+  });
 
 const tokenUpdate = asyncHandler( async (req, res) => {  
     
@@ -348,12 +346,38 @@ const updatePassword = asyncHandler( async (req, res) => {
     const {oldPassword, newPassword} = req.body;
     const user = req.user;
 
+    if(!oldPassword || !newPassword){
+        res.status(400);
+        throw new ApiError(400, "All fields are required");
+    }
+    
     if(oldPassword == newPassword){
         res.status(400);
         throw new ApiError(400, "Please enter different password");
     }
-
     
+    const newUser = await User.findById(user._id);
+    const passwordMatched = await newUser.comparePassword(oldPassword);
+    
+    if(!passwordMatched){
+        res.status(401);
+        throw new ApiError(401, "Invalid password");
+    }
+    const {refreshToken, accessToken} = await generateTokens(user._id);
+
+    newUser.password = newPassword;
+    newUser.refreshToken = refreshToken;
+    await newUser.save({validateBeforeSave: false})
+
+    const updatedUser = await User.findById(newUser._id).select("-password -refreshToken -__v -createdAt -updatedAt -deletedAt -otp -otp_time");
+    
+    res.status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+        new ApiResponse(200, {updatedUser,accessToken, refreshToken}, "Password updated successfully")
+    )
+
 });
 
 export { registerUser, loginUser, logout, tokenUpdate, currentUser, verifyUser, resendOtp, updateName, updatePhone, updateAvatar, updatePassword };
