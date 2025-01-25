@@ -239,4 +239,32 @@ const verifyUser = asyncHandler( async (req, res) => {
     
 });
 
-export { registerUser, loginUser, logout, tokenUpdate, currentUser, verifyUser};
+const resendOtp = asyncHandler( async (req, res) => {
+    const { email } = req.body;
+
+    if(!email){
+        res.status(400);
+        throw new ApiError(400, "All fields are required");
+    }
+
+    const user = await User.findOne({email});
+
+    if(!user){
+        res.status(400);
+        throw new ApiError(400, "User not found");
+    }
+
+    const {otp, otp_time} = await user.defineOtp();
+
+    user.otp = otp;
+    user.otp_time = otp_time;
+    await user.save({ validateBeforeSave: false });
+
+    return res.status(200).json(
+        new ApiResponse(200, null, "OTP sent successfully")
+    )
+});
+
+
+
+export { registerUser, loginUser, logout, tokenUpdate, currentUser, verifyUser, resendOtp};
