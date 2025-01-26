@@ -381,15 +381,95 @@ const updatePassword = asyncHandler( async (req, res) => {
 });
 
 const sendForgetPassword = asyncHandler( async (req, res) => {
+    const {email} = req.body;
+    
+    if(!email){
+        res.status(400);
+        throw new ApiError(400, "Please enter your email")
+    }
+    
+    const user = await User.findOne({email});
+    if(!user){
+        res.status(404);
+        throw new ApiError(404, "User not found");
+    }
+    
+    const {otp, otp_time} = await user.defineOtp();
+    
+    user.otp = otp;
+    user.otp_time = otp_time;
+    await user.save({ validateBeforeSave: false });
+    
+    
+    res.status(200).json(
+        new ApiResponse(200, null, "Email sent successfully")
+    )
 
 });
 
 const checkExpiryForget = asyncHandler( async (req, res) => {
-    
+    const {email, token} = req.params;
+
+    if(!email || !token) {
+        res.status(400);
+        throw new ApiError(400, "missing Data");
+    }
+
+    const user = await User.findOne({email});
+
+    if(!user){
+        res.status(404);
+        throw new ApiError(404, "User not found");
+    }
+
+    const currentTime = Date.now();
+
+    if(currentTime > user.otp_time){
+        res.status(401);
+        throw new ApiError(401, "OTP expired");
+    }
+
+    if(user.otp != token){
+        res.status(401);
+        throw new ApiError(401, "Invalid otp");
+    }
+
+    user.otp = null;
+    user.otp_time = null;
+    await user.save({ validateBeforeSave: false });
+
+    return res.status(200).json(
+        new ApiResponse(200, null, "OTP verified successfully")
+    )
 });
 
 const forgetPassword = asyncHandler( async (req, res) => {
-   
+    const {email, oldPassword, newPassword} = req.body;
+
+    if(!oldPassword || !newPassword){
+        res.status(400);
+        throw new ApiError(400, "All fields are required");
+    }
+    
+    if(oldPassword == newPassword){
+        res.status(400);
+        throw new ApiError(400, "Please enter different password");
+    }
+    
+    const newUser = await User.findOne({email});
+    const passwordMatched = await newUser.comparePassword(oldPassword);
+    
+    if(!passwordMatched){
+        res.status(401);
+        throw new ApiError(401, "Invalid password");
+    }
+    newUser.password = newPassword;
+    await newUser.save({validateBeforeSave: false})
+    
+    res.status(200).json(
+        new ApiResponse(200, null, "Password updated successfully")
+    )
+
 });
 
 export { registerUser, loginUser, logout, tokenUpdate, currentUser, verifyUser, resendOtp, updateName, updatePhone, updateAvatar, updatePassword,forgetPassword, sendForgetPassword, checkExpiryForget };

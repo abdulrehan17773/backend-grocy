@@ -14,7 +14,7 @@ UserRouter.route("/refresh-token").post(tokenUpdate);
 UserRouter.route("/verification").post(verifyUser);
 UserRouter.route("/resend-otp").post(resendOtp);
 UserRouter.route("/send-forget").post(sendForgetPassword);
-UserRouter.route("/forget/:email").get(checkExpiryForget);
+UserRouter.route("/forget/:email/:token").get(checkExpiryForget);
 UserRouter.route("/forget-password").patch(forgetPassword);
 UserRouter.use(checkAuth);
 UserRouter.route("/logout").post(logout);
