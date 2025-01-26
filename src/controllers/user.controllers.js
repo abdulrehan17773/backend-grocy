@@ -398,8 +398,7 @@ const updatePassword = asyncHandler( async (req, res) => {
 
 });
 
-const sendForgetPassword 
-= asyncHandler( async (req, res) => {
+const sendForgetPassword = asyncHandler( async (req, res) => {
     const {email} = req.body;
     
     if(!email){
