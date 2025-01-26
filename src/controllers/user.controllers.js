@@ -100,17 +100,18 @@ const loginUser = asyncHandler( async (req, res) => {
         throw new ApiError(404, "User not found");
     }
 
-    if(userExists.verify == false){
-        res.status(200).json(
-        new ApiResponse(200, null, "Verification required")
-        )
-    }
-
     // match password
     const passwordMatched = await userExists.comparePassword(password);
     if (!passwordMatched) {
         res.status(401);
         throw new ApiError(401, "Invalid password");
+    }
+
+    if(userExists.verify == false){
+        res.status(200).json(
+        new ApiResponse(200, null, "Verification required")
+        )
+        return;
     }
     
     // generate tokens 
@@ -122,6 +123,8 @@ const loginUser = asyncHandler( async (req, res) => {
         res.status(500);
         throw new ApiError(500, "Server error");
     }
+
+    await sendEmail(loginUser.email, `Login`, `Login successfully!`)
 
     return res.status(200)
         .cookie("refreshToken", refreshToken, options)
@@ -224,7 +227,6 @@ const verifyUser = asyncHandler( async (req, res) => {
 
 
     if(user.otp != otp){
-        console.log(user.otp, otp)
         res.status(401);
         throw new ApiError(401, "Invalid otp");
     }
@@ -242,7 +244,7 @@ const verifyUser = asyncHandler( async (req, res) => {
     .cookie("accessToken", accessToken, options)
     .cookie("refreshToken", refreshToken, options)
     .json(
-        new ApiResponse(200, {updatedUser, accessToken, refreshToken }, "Token updated successfully")
+        new ApiResponse(200, {updatedUser, accessToken, refreshToken }, "Token verification successfully")
     )
     
 });
@@ -396,7 +398,8 @@ const updatePassword = asyncHandler( async (req, res) => {
 
 });
 
-const sendForgetPassword = asyncHandler( async (req, res) => {
+const sendForgetPassword 
+= asyncHandler( async (req, res) => {
     const {email} = req.body;
     
     if(!email){
@@ -416,7 +419,7 @@ const sendForgetPassword = asyncHandler( async (req, res) => {
     user.otp_time = otp_time;
     await user.save({ validateBeforeSave: false });
     
-    await sendEmail(user.email, `Forget Password`, `Update your password using this link http://127.0.0.1:4000/api/v1/user/forget/${user.email}/${user.otp}`)
+    await sendEmail(user.email, `Forget Password`, `Update your password using this link http://127.0.0.1:4000/api/v1/users/forget/${user.email}/${user.otp}`)
     
     res.status(200).json(
         new ApiResponse(200, null, "Email sent successfully")
@@ -470,6 +473,11 @@ const forgetPassword = asyncHandler( async (req, res) => {
     }
     
     const newUser = await User.findOne({email});
+
+    if(!newUser){
+        res.status(404);
+        throw new ApiError(404, "User not found");
+    }
     const passwordMatched = await newUser.comparePassword(oldPassword);
     
     const currentTime = Date.now();
