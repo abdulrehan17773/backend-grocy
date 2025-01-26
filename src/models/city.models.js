@@ -3,7 +3,7 @@ import mongoose, {Schema} from "mongoose";
 const citySchema = new Schema({
     name:{
         type: String,
-        ref: "User",
+        unique: true,
         required: true,
         index: true
     },
@@ -17,4 +17,4 @@ const citySchema = new Schema({
     }
 }, {timestamps: true})
 
-export default City = mongoose.model("City", citySchema);
+export const City = mongoose.model("City", citySchema);

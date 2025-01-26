@@ -21,4 +21,4 @@ const subCitySchema = new Schema({
     }
 }, {timestamps: true})
 
-export default SubCity = mongoose.model("SubCity", subCitySchema);
+export const SubCity = mongoose.model("SubCity", subCitySchema);
