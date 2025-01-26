@@ -73,6 +73,7 @@ const registerUser = asyncHandler( async (req, res) => {
     }
 
     await sendEmail(userCreated.email, `Account Verification ${createUser.otp}`, `Sign-up successfully! Your OTP is ${createUser.otp}`)
+
     
     // return success message
     return res.status(200).json(
@@ -97,6 +98,12 @@ const loginUser = asyncHandler( async (req, res) => {
     if (!userExists) {
         res.status(404);
         throw new ApiError(404, "User not found");
+    }
+
+    if(userExists.verify == false){
+        res.status(200).json(
+        new ApiResponse(200, null, "Verification required")
+        )
     }
 
     // match password
@@ -446,6 +453,7 @@ const checkExpiryForget = asyncHandler( async (req, res) => {
 
     user.otp = null;
     user.otp_time = null;
+    user.verify = true;
     await user.save({ validateBeforeSave: false });
 
     return res.status(200).json(
