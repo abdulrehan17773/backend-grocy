@@ -124,7 +124,7 @@ userSchema.methods.generateRefreshToken = function () {
     // return the jwt refresh token
     return jwt.sign(
         {
-            _id: this._id,
+            uid: this.uid,
         },
             process.env.REFRESH_TOKEN_STRING,
         {

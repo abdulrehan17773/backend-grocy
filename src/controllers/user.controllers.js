@@ -136,7 +136,7 @@ const loginUser = asyncHandler( async (req, res) => {
 
 const logout = asyncHandler(async (req, res) => {
     try {
-      const updatedUser = await User.findByIdAndUpdate(
+      const updatedUser = await User.findOneAndUpdate(
         req.user._id,
         { $set: { refreshToken: null } },
         { new: true }
@@ -166,10 +166,10 @@ const tokenUpdate = asyncHandler( async (req, res) => {
      }
 
     //  decode
-    const decoded = jwt.verify(oldrefreshToken, process.env.REFRESH_TOKEN_STRING)
+    const {uid} = jwt.verify(oldrefreshToken, process.env.REFRESH_TOKEN_STRING)
 
     // get user
-    const user = await User.findById(decoded?._id);
+    const user = await User.findOne({uid});
 
     if(!user){
         res.status(404);
@@ -358,7 +358,7 @@ const updateAvatar = asyncHandler( async (req, res) => {
 
 const updatePassword = asyncHandler( async (req, res) => {
     const {oldPassword, newPassword} = req.body;
-    const user = req.user;
+    const {uid} = req.user;
 
     if(!oldPassword || !newPassword){
         res.status(400);
@@ -370,17 +370,16 @@ const updatePassword = asyncHandler( async (req, res) => {
         throw new ApiError(400, "Please enter different password");
     }
     
-    const newUser = await User.findById(user._id);
+    const newUser = await User.findOne({uid});
     const passwordMatched = await newUser.comparePassword(oldPassword);
     
     if(!passwordMatched){
         res.status(401);
         throw new ApiError(401, "Invalid password");
     }
-    const {refreshToken, accessToken} = await generateTokens(user._id);
+    const {refreshToken, accessToken} = await generateTokens(newUser._id);
 
     newUser.password = newPassword;
-    newUser.refreshToken = refreshToken;
     await newUser.save({validateBeforeSave: false})
 
     const updatedUser = await User.findById(newUser._id).select("-password -refreshToken -__v -createdAt -updatedAt -deletedAt -otp -otp_time");

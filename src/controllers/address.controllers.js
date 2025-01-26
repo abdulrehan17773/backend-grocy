@@ -10,7 +10,7 @@ import ApiResponse from "../utils/ApiResponse.js"
 const createUserAddress = asyncHandler( async (req, res) => {
     
     res.status(200).json(
-        new ApiResponse(200, create, "address created successfully")
+        new ApiResponse(200, null, "address created successfully")
     )
 })
 
