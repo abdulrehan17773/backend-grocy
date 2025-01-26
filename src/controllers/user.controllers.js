@@ -4,6 +4,7 @@ import  { ApiError } from "../utils/ApiError.js";
 import ApiResponse from "../utils/ApiResponse.js";
 import { handleUploadFile, deleteFileFromCloudinary } from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
+import sendEmail from "../utils/email.js";
 
 
 const options = {
@@ -70,6 +71,8 @@ const registerUser = asyncHandler( async (req, res) => {
         res.status(500);
         throw new ApiError(500);
     }
+
+    await sendEmail(userCreated.email, `Account Verification ${createUser.otp}`, `Sign-up successfully! Your OTP is ${createUser.otp}`)
     
     // return success message
     return res.status(200).json(
@@ -257,6 +260,8 @@ const resendOtp = asyncHandler( async (req, res) => {
     user.otp = otp;
     user.otp_time = otp_time;
     await user.save({ validateBeforeSave: false });
+    
+    await sendEmail(user.email, `Resend  OTP ${user.otp}`, `Your OTP is ${user.otp}`)
 
     return res.status(200).json(
         new ApiResponse(200, null, "OTP sent successfully")
@@ -370,6 +375,10 @@ const updatePassword = asyncHandler( async (req, res) => {
     await newUser.save({validateBeforeSave: false})
 
     const updatedUser = await User.findById(newUser._id).select("-password -refreshToken -__v -createdAt -updatedAt -deletedAt -otp -otp_time");
+
+
+    await sendEmail(updatedUser.email, `Change Password`, `Your password Updated successfully!`)
+    
     
     res.status(200)
     .cookie("accessToken", accessToken, options)
@@ -400,6 +409,7 @@ const sendForgetPassword = asyncHandler( async (req, res) => {
     user.otp_time = otp_time;
     await user.save({ validateBeforeSave: false });
     
+    await sendEmail(user.email, `Forget Password`, `Update your password using this link http://127.0.0.1:4000/api/v1/user/forget/${user.email}/${user.otp}`)
     
     res.status(200).json(
         new ApiResponse(200, null, "Email sent successfully")
@@ -466,6 +476,8 @@ const forgetPassword = asyncHandler( async (req, res) => {
     newUser.password = newPassword;
     await newUser.save({validateBeforeSave: false})
     
+    await sendEmail(newUser.email, `Change Password`, `Your password Updated successfully!`)
+
     res.status(200).json(
         new ApiResponse(200, null, "Password updated successfully")
     )
