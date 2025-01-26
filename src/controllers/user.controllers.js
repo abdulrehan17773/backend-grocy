@@ -451,22 +451,17 @@ const checkExpiryForget = asyncHandler( async (req, res) => {
         throw new ApiError(401, "Invalid otp");
     }
 
-    user.otp = null;
-    user.otp_time = null;
-    user.verify = true;
-    await user.save({ validateBeforeSave: false });
-
     return res.status(200).json(
         new ApiResponse(200, null, "OTP verified successfully")
     )
 });
 
 const forgetPassword = asyncHandler( async (req, res) => {
-    const {email, oldPassword, newPassword} = req.body;
+    const {email,token, oldPassword, newPassword} = req.body;
 
-    if(!oldPassword || !newPassword){
+    if(!oldPassword || !newPassword || !email || !token){
         res.status(400);
-        throw new ApiError(400, "All fields are required");
+        throw new ApiError(400, "Missing Data");
     }
     
     if(oldPassword == newPassword){
@@ -477,11 +472,27 @@ const forgetPassword = asyncHandler( async (req, res) => {
     const newUser = await User.findOne({email});
     const passwordMatched = await newUser.comparePassword(oldPassword);
     
+    const currentTime = Date.now();
+
+    if(currentTime > newUser.otp_time){
+        res.status(401);
+        throw new ApiError(401, "OTP expired");
+    }
+
+    if(newUser.otp != token){
+        res.status(401);
+        throw new ApiError(401, "Invalid otp");
+    }
+
     if(!passwordMatched){
         res.status(401);
         throw new ApiError(401, "Invalid password");
     }
+
     newUser.password = newPassword;
+    newUser.otp = null;
+    newUser.otp_time = null;
+    newUser.verify = true;
     await newUser.save({validateBeforeSave: false})
     
     await sendEmail(newUser.email, `Change Password`, `Your password Updated successfully!`)
@@ -489,7 +500,7 @@ const forgetPassword = asyncHandler( async (req, res) => {
     res.status(200).json(
         new ApiResponse(200, null, "Password updated successfully")
     )
-
+    
 });
 
 export { registerUser, loginUser, logout, tokenUpdate, currentUser, verifyUser, resendOtp, updateName, updatePhone, updateAvatar, updatePassword,forgetPassword, sendForgetPassword, checkExpiryForget };

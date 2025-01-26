@@ -63,7 +63,7 @@ userSchema.pre("save", async function (next) {
     
     if (this.isNew) {    
         // generate uid for the user
-        const addFields = this.email + this.phone;
+        const addFields = Date.now();
         const uniqueId  = await bcrypt.hash(addFields, 10);
         this.uid = uniqueId.slice(7, 15);
 
