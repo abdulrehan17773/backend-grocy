@@ -3,6 +3,9 @@ import { User } from "../models/user.models.js"
 import { Useraddress } from "../models/userAddress.model.js"
 import { City } from "../models/city.models.js"
 import { SubCity } from "../models/subCity.models.js"
+import { Category } from "../models/category.models.js"
+import { Unit } from "../models/unit.models.js"
+// import { Product } from "../models/product.models.js"
 import { ApiError } from "../utils/ApiError.js"
 import ApiResponse from "../utils/ApiResponse.js"
 
@@ -77,7 +80,14 @@ const createUserAddress = asyncHandler( async (req, res) => {
 const getAllUserAddress = asyncHandler( async (req, res) => {
     const {uid} = req.user;
 
-    const address = await Useraddress.find({$and: [{user_id:uid}, {deletedAt: null}]})
+    const address = await Useraddress.aggregate([
+        {
+            $match: {
+                user_id: uid,
+                deletedAt: null
+            }
+        },
+    ]);
 
     if( !address){
         return res.status(200).json(
