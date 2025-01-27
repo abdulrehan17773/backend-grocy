@@ -1,14 +1,9 @@
 import { asyncHandler } from "../utils/asyncHandler.js"
-import { User } from "../models/user.models.js"
 import { Useraddress } from "../models/userAddress.model.js"
 import { City } from "../models/city.models.js"
 import { SubCity } from "../models/subCity.models.js"
-import { Category } from "../models/category.models.js"
-import { Unit } from "../models/unit.models.js"
-// import { Product } from "../models/product.models.js"
 import { ApiError } from "../utils/ApiError.js"
 import ApiResponse from "../utils/ApiResponse.js"
-import mongoose from "mongoose"
 
 
 const getCity = asyncHandler( async (req, res) => {
