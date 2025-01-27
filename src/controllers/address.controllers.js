@@ -23,8 +23,9 @@ const getSubCity = asyncHandler( async (req, res) => {
     const {city_id} = req.body;
     const city = await SubCity.find({$and: [{city_id}, {is_active: true}]}).select("-__v -city_id -is_active -createdAt -updatedAt -deletedAt");
     if(!city){
-        res.status(404);
-        throw new ApiError(404, "Sub Cities not found")
+        return res.status(200).json(
+            new ApiResponse(200, city, "Sub Cities fetched successfully")
+        )
     }
 
     res.status(200).json(
@@ -41,7 +42,7 @@ const createUserAddress = asyncHandler( async (req, res) => {
         throw new ApiError(400, "All fields are required")
     }
 
-    const oldAddress = await Useraddress.find({user_id:uid});
+    const oldAddress = await Useraddress.find({ $and: [ {user_id:uid} , {deletedAt: null}]});
     if(oldAddress.length >= 3){
         res.status(400);
         throw new ApiError(400, "Address limit reached!")
@@ -76,7 +77,7 @@ const createUserAddress = asyncHandler( async (req, res) => {
 const getAllUserAddress = asyncHandler( async (req, res) => {
     const {uid} = req.user;
 
-    const address = await Useraddress.find({user_id:uid})
+    const address = await Useraddress.find({$and: [{user_id:uid}, {deletedAt: null}]})
 
     if( !address){
         return res.status(200).json(
@@ -98,14 +99,15 @@ const deleteUserAddress = asyncHandler( async (req, res) => {
         throw new ApiError(400, "All fields are required")
     }
 
-    const address = await Useraddress.findOne({$and: [{_id:id}, {user_id:uid}]});
+    const address = await Useraddress.findOne({$and: [{_id:id}, {user_id:uid}, {deletedAt: null}]});
 
     if(!address){
         res.status(404);
         throw new ApiError(404, "Address not found")
     }
 
-    const deleted = await address.deleteOne();
+    address.deletedAt = Date.now();
+    const deleted = await address.save({validateBeforeSave: false});
 
     if(!deleted){
         res.status(500);
