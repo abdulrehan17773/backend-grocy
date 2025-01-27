@@ -17,10 +17,6 @@ const userAddressSchema = new Schema({
     address: {
         type: String,
         required: true
-    },
-    type: {
-        type: String,
-        required: true
     },  
     deletedAt:{
         type: Date,
