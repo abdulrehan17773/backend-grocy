@@ -8,10 +8,10 @@ const userAddressSchema = new Schema({
         index: true
     },
     subcity_id: {
-        type: String,
-        ref: "SubCity",
-        required: true,
-        index: true
+        type: Schema.Types.ObjectId, 
+        ref: "SubCity", 
+        required: true, 
+        index: true 
     },
     address: {
         type: String,

@@ -1,6 +1,6 @@
 import mongoose, {Schema} from "mongoose";
 
-const catSchema = Schema({
+const catSchema = new Schema({
     name: {
         type: String,
         required: true,

@@ -8,6 +8,7 @@ import { Unit } from "../models/unit.models.js"
 // import { Product } from "../models/product.models.js"
 import { ApiError } from "../utils/ApiError.js"
 import ApiResponse from "../utils/ApiResponse.js"
+import mongoose from "mongoose"
 
 
 const getCity = asyncHandler( async (req, res) => {
@@ -82,12 +83,62 @@ const getAllUserAddress = asyncHandler( async (req, res) => {
 
     const address = await Useraddress.aggregate([
         {
-            $match: {
-                user_id: uid,
-                deletedAt: null
-            }
+          $match: {
+            user_id: uid,
+            deletedAt: null
+          }
         },
-    ]);
+        {
+          $lookup: {
+            from: "subcities",
+            localField: "subcity_id",
+            foreignField: "_id",
+            as: "subcity"
+          }
+        },
+        {
+          $unwind: "$subcity"
+        },
+        {
+          $lookup: {
+            from: "cities",
+            localField: "subcity.city_id",
+            foreignField: "_id",
+            as: "city"
+          }
+        },
+        {
+          $unwind: "$city"
+        },
+        {
+          $addFields: {
+            subcity: {
+              _id: "$subcity._id",
+              name: "$subcity.name",
+              // Add other subcity fields here
+            },
+            city: {
+              _id: "$city._id",
+              name: "$city.name",
+              // Add other city fields here
+            },
+            status: {
+              $cond: [{ $and: ["$subcity.is_active", "$city.is_active"] }, true, false]
+            }
+          }
+        },
+        {
+          $project: {
+            _id: 1,
+            address: 1,
+            "subcity._id": 1, 
+            "subcity.name": 1, 
+            "city._id": 1, 
+            "city.name": 1, 
+            "status": 1 
+          }
+        }
+      ]);
 
     if( !address){
         return res.status(200).json(

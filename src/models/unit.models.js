@@ -1,6 +1,6 @@
 import mongoose, {Schema} from "mongoose";
 
-const unitSchema = Schema({
+const unitSchema = new Schema({
     name: {
         type: String,
         required: true,
