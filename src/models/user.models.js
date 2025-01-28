@@ -30,7 +30,7 @@ const userSchema = new Schema({
     },
     avatar: {
         type: String, 
-        default: "logo.png" 
+        default: "https://res.cloudinary.com/dfnyh1dnu/image/upload/v1738077224/logo_ghgifr.webp" 
     },
     verify: {
         type: Boolean,

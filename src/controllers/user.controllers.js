@@ -63,7 +63,7 @@ const registerUser = asyncHandler( async (req, res) => {
     }
 
     // create new user
-    const createUser = await User.create({uid, fullname, phone, email: email.toLowerCase(), password});
+    const createUser = await User.create({uid, fullname, phone, email: email.toLowerCase(), password, avatar:"https://res.cloudinary.com/dfnyh1dnu/image/upload/v1738077224/logo_ghgifr.webp"});
 
     // check user created successfully ans remove extra data
     const userCreated = await User.findById(createUser._id).select("-password -refreshToken -__v -createdAt -updatedAt -deletedAt -otp -otp_time");
@@ -345,8 +345,7 @@ const updateAvatar = asyncHandler( async (req, res) => {
         throw new ApiError(500, "Something went wrong");
     }
 
-    if(oldavatar != "logo.png"){
-        
+    if(oldavatar != "https://res.cloudinary.com/dfnyh1dnu/image/upload/v1738077224/logo_ghgifr.webp"){
         await deleteFileFromCloudinary(oldavatar);
     }
     
