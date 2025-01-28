@@ -26,9 +26,11 @@ app.use(cookieParser());  // This parses cookies for access to req.cookies
 // import routes here
 import { UserRouter } from './routes/user.routes.js';
 import { addressRouter } from './routes/userAddress.routes.js';
+import { unitRouter } from './routes/unit.routes.js';
 
 // define routes here
 app.use("/api/v1/users", UserRouter);
 app.use("/api/v1/address", addressRouter);
+app.use("/api/v1/unit", unitRouter);
 
 export { app };
