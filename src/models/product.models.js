@@ -5,7 +5,6 @@ const proSchema = new Schema({
     name: {
         type: String,
         required: true,
-        unique: true
     },
     cost: {
         type: Number,
