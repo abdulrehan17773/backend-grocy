@@ -457,17 +457,13 @@ const checkExpiryForget = asyncHandler( async (req, res) => {
 });
 
 const forgetPassword = asyncHandler( async (req, res) => {
-    const {email,token, oldPassword, newPassword} = req.body;
+    const {email, token, newPassword} = req.body;
 
-    if(!oldPassword || !newPassword || !email || !token){
+    if(!newPassword || !email || !token){
         res.status(400);
         throw new ApiError(400, "Missing Data");
     }
     
-    if(oldPassword == newPassword){
-        res.status(400);
-        throw new ApiError(400, "Please enter different password");
-    }
     
     const newUser = await User.findOne({email});
 
@@ -475,7 +471,7 @@ const forgetPassword = asyncHandler( async (req, res) => {
         res.status(404);
         throw new ApiError(404, "User not found");
     }
-    const passwordMatched = await newUser.comparePassword(oldPassword);
+    const passwordMatched = await newUser.comparePassword(newPassword);
     
     const currentTime = Date.now();
 
@@ -489,9 +485,9 @@ const forgetPassword = asyncHandler( async (req, res) => {
         throw new ApiError(401, "Invalid otp");
     }
 
-    if(!passwordMatched){
-        res.status(401);
-        throw new ApiError(401, "Invalid password");
+    if(passwordMatched){
+        res.status(400);
+        throw new ApiError(400, "Please enter different password");
     }
 
     newUser.password = newPassword;
