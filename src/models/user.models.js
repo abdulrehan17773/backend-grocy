@@ -44,6 +44,10 @@ const userSchema = new Schema({
         type: Number,
         default: null
     },
+    role: {
+        type: [String],
+        default: 'User'
+    },
     refreshToken: {
         type: String,
     },
