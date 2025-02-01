@@ -1,7 +1,6 @@
 import {asyncHandler} from "../utils/asyncHandler.js"
 import { ApiError } from "../utils/ApiError.js"
 import ApiResponse from "../utils/ApiResponse.js"
-import { User } from "../models/user.models.js"
 import { Order } from "../models/order.models.js"
 import { OrdersDetails } from "../models/orderDetails.models.js"
 import { Product } from "../models/product.models.js"
@@ -82,7 +81,7 @@ const placeOrder = asyncHandler(async (req, res) => {
 const getOrder = asyncHandler(async (req, res) => {
     const { uid } = req.user;
 
-    const orders = await Order.find({ user_id: uid, deletedAt: null }).select("order_id address phone status total_price")
+    const orders = await Order.find({ user_id: uid, deletedAt: null }).select("-_id order_id address phone status total_price")
 
     if( !orders){
         return res.status(200).json(
@@ -95,4 +94,131 @@ const getOrder = asyncHandler(async (req, res) => {
   
 });
 
-export {placeOrder, getOrder};
+const cancelOrder = asyncHandler(async (req, res) => {
+    const { uid } = req.user;
+    const {order_id, reason} = req.body;
+
+    if( !order_id ){
+        res.status(400);
+        throw new ApiError(400, "Missing Data")
+    }
+
+    const order = await Order.findOne({$and: [{user_id:uid}, {order_id}, {deletedAt: null}]});
+  
+    if(!order) {
+        res.status(404);
+        throw new ApiError(404, "Order not found")
+    }
+
+    if(order.status != 'pending'){
+        res.status(400);
+        throw new ApiError(400, 'Order cannot be cancelled')
+    }
+
+    order.status = 'cancelled';
+    order.reason = reason || '' ;
+    order.cancelled_by = 'user';
+    order.cancelled_at = Date.now();
+    const updated = await order.save({validateBeforeSave: false});
+
+    if( !updated){
+        res.status(500);
+        throw new ApiError(500, "Something went wrong")
+    }
+
+    res.status(200).json(
+        new ApiResponse(200, null, "Order cancelled successfully")
+    )
+
+});
+
+const orderDetails = asyncHandler(async (req, res) => {
+    const { order_id } = req.params;
+    const { uid } = req.user;
+
+    if (!order_id) {
+        res.status(400);
+        throw new ApiError(400, "Missing Data");
+    }
+
+    try {
+        const order = await Order.aggregate([
+            {
+                $match: {
+                    $and: [{ user_id: uid }, { order_id }, { deletedAt: null }]
+                }
+            },
+            {
+                $lookup: {
+                    from: "ordersdetails",
+                    let: { order_id: "$order_id" }, // Define a variable for order_id
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $eq: ["$order_id", "$$order_id"] } ,
+                                deletedAt: null
+                            }
+                        },
+                        {
+                            $lookup: {
+                                from: "products",
+                                localField: "pro_id",
+                                foreignField: "_id",
+                                as: "product"
+                            }
+                        },
+                        { $unwind: "$product" } // Unwind the product array if needed
+                    ],
+                    as: "orderDetails"
+                }
+            },
+            {
+                $addFields: { 
+                    details: {
+                        $map: {
+                            input: "$orderDetails",
+                            as: "orderDetail",
+                            in: {
+                                name: "$$orderDetail.product.name",
+                                img: "$$orderDetail.product.img",
+                                qty: "$$orderDetail.qty", // Access qty from orderDetail
+                                price: "$$orderDetail.price" // Access price from orderDetail
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    details: 1,
+                    order_id: 1,
+                    address: 1,
+                    phone: 1,
+                    status: 1,
+                    total_price: 1,
+                    delivery_charges: 1,
+                    note: 1,
+                    reason: 1,
+                    cancelled_by: 1,
+                    cancelled_at: 1,
+                    createdAt: 1,
+                    _id: 0
+                }
+            }
+        ]);
+
+        if (!order || order.length === 0) {
+            res.status(404);
+            throw new ApiError(404, "Order not found");
+        }
+
+        res.status(200).json(
+            new ApiResponse(200, order[0], "Order fetched successfully") // Access the first element
+        );
+    } catch (error) {
+        console.error("Error fetching order:", error);
+        res.status(500).json(new ApiResponse(500, null, "Error fetching order"));
+    }
+});
+
+export {placeOrder, getOrder, cancelOrder, orderDetails};
