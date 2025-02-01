@@ -1,4 +1,6 @@
 import mongoose, {Schema} from "mongoose";
+import aggregatePaginate from "mongoose-aggregate-paginate-v2";
+
 
 const orderSchema = new Schema({
     user_id:{
@@ -32,7 +34,8 @@ const orderSchema = new Schema({
         default: null
     },
     status: {
-        type: Sequelize.ENUM('pending', 'preparing', 'ready', 'onway', 'delivered', 'cancelled'), 
+        type: String,
+        enum: ['pending', 'preparing', 'ready', 'onway', 'delivered', 'cancelled'],
         defaultValue: 'pending'
     },
     preparing_time: {
@@ -52,8 +55,9 @@ const orderSchema = new Schema({
         default: null
     },
     cancelled_by: {
-        type: Sequelize.ENUM('user', 'admin'), 
-        defaultValue: 'pending'
+        type: String,
+        enum: ['user', 'admin'],
+        default: null 
     },
     cancelled_at: {
         type: Date,
@@ -67,6 +71,10 @@ const orderSchema = new Schema({
         type: String,
         default: null
     },
+    delivered_charges: {
+        type: Number,
+        default: 0
+    },
     total_price: {
         type: Number,
         required: true
@@ -77,5 +85,7 @@ const orderSchema = new Schema({
     }
 
 }, {timestamps: true})
+
+orderSchema.plugin(aggregatePaginate);
 
 export const Order = mongoose.model("Order", orderSchema);

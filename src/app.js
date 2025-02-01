@@ -29,6 +29,7 @@ import { addressRouter } from './routes/userAddress.routes.js';
 import { unitRouter } from './routes/unit.routes.js';
 import { catRouter } from './routes/category.routes.js';
 import { productRouter } from './routes/product.routes.js'
+import {orderRouter} from './routes/order.routes.js'
 
 // define routes here
 app.use("/api/v1/users", UserRouter);
@@ -36,5 +37,6 @@ app.use("/api/v1/address", addressRouter);
 app.use("/api/v1/unit", unitRouter);
 app.use("/api/v1/cat", catRouter);
 app.use("/api/v1/pro", productRouter);
+app.use("/api/v1/order", orderRouter);
 
 export { app };
