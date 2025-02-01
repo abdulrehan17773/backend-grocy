@@ -80,18 +80,65 @@ const placeOrder = asyncHandler(async (req, res) => {
 
 const getOrder = asyncHandler(async (req, res) => {
     const { uid } = req.user;
-
-    const orders = await Order.find({ user_id: uid, deletedAt: null }).select("-_id order_id address phone status total_price")
-
-    if( !orders){
-        return res.status(200).json(
-            new ApiResponse(200, orders, "Order not found"))
+    const { page = 1, status } = req.body; // Get page and limit from req.body
+    const limit = 12;
+    
+    let getStatus = {status: status};
+    if( !status){
+        getStatus = {};
     }
 
-    res.status(200).json(
-        new ApiResponse(200, orders, "Order fetched successfully")
-    )
-  
+    const aggregate = Order.aggregate([ // Store the aggregation pipeline
+        {
+            $match: {
+                $and: [{ user_id: uid }, { deletedAt: null }, getStatus]
+            }
+        },
+        {
+            $sort: {
+                createdAt: -1
+            }
+        },
+        {
+            $project: {
+                order_id: 1,
+                address: 1,
+                phone: 1,
+                status: 1,
+                total_price: 1,
+                _id: 0 // Exclude _id for cleaner response
+            }
+        }
+    ]);
+
+    const options = {
+        page: parseInt(page),
+        limit: parseInt(limit),
+    };
+
+    try {
+        const result = await Order.aggregatePaginate(aggregate, options);
+
+        const responseData = { // Combine data and pagination info
+            orders: result.docs,
+            totalDocs: result.totalDocs,
+            limit: result.limit,
+            page: result.page,
+            totalPages: result.totalPages,
+            pagingCounter: result.pagingCounter,
+            hasPrevPage: result.hasPrevPage,
+            hasNextPage: result.hasNextPage,
+            prevPage: result.prevPage,
+            nextPage: result.nextPage
+        };
+
+        res.status(200).json(
+            new ApiResponse(200, responseData, "Order fetched successfully") // Send combined data
+        );
+    } catch (error) {
+        console.error("Error fetching orders:", error);
+        res.status(500).json(new ApiResponse(500, null, "Error fetching orders"));
+    }
 });
 
 const cancelOrder = asyncHandler(async (req, res) => {
@@ -202,6 +249,8 @@ const orderDetails = asyncHandler(async (req, res) => {
                     cancelled_by: 1,
                     cancelled_at: 1,
                     createdAt: 1,
+                    delivered_time: 1,
+                    paid_by: 1,
                     _id: 0
                 }
             }

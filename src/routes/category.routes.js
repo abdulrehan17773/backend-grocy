@@ -5,8 +5,8 @@ import { upload } from "../middlewares/multer.middleware.js";
 
 const catRouter = Router();
 
-catRouter.use(checkAuth)
 catRouter.route("/getall").get(getAllCategory)
+catRouter.use(checkAuth)
 catRouter.use(checkAdmin)
 catRouter.route("/create").post(upload.single("img"), createCategory)
 catRouter.route("/delete").patch(deleteCategory)

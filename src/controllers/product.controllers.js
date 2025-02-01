@@ -7,50 +7,54 @@ import ApiResponse from "../utils/ApiResponse.js"
 import { handleUploadFile, deleteFileFromCloudinary } from "../utils/cloudinary.js";
 
 
-const getAll = asyncHandler( async (req, res) => {
-    const { featured } = req.body;
-    let is_f = {is_active: true};
-    if(featured){
-        is_f = {is_featured: true};
+const getAll = asyncHandler(async (req, res) => {
+    const { featured, page = 1 } = req.body; // Get page and limit from query parameters
+    
+    let limit = 12
+
+    let is_f = {};
+    if (featured === 'true') { // Important: Check for the string "true"
+        is_f = { is_featured: true };
+        limit = 6;
     }
 
-    const product = await Product.aggregate([
+    const aggregate = Product.aggregate([ // Your aggregation pipeline
         {
             $match: {
                 $and: [
-                    {is_active: true},
-                    {deletedAt: null},
-                    is_f,
+                    { is_active: true },
+                    { deletedAt: null },
+                    is_f
                 ],
-            }
+            },
         },
         {
             $lookup: {
                 from: "categories",
                 localField: "cat_id",
                 foreignField: "_id",
-                as: "category"
-            }
+                as: "category",
+            },
         },
         {
-            $unwind: "$category"
+            $unwind: "$category",
         },
         {
             $lookup: {
                 from: "units",
                 localField: "unit_id",
                 foreignField: "_id",
-                as: "unit"
-            }
+                as: "unit",
+            },
         },
         {
-            $unwind: "$unit"
+            $unwind: "$unit",
         },
         {
             $addFields: {
-                "category_name": "$category.name",
-                "unit_name": "$unit.name"
-            }
+                category_name: "$category.name",
+                unit_name: "$unit.name",
+            },
         },
         {
             $project: {
@@ -63,22 +67,41 @@ const getAll = asyncHandler( async (req, res) => {
                 deletedAt: 0,
                 is_active: 0,
                 is_featured: 0,
+                unit_id: 0,
                 qty: 0,
-                cost:0
-            }
+                cost: 0,
+            },
+        },
+    ]);
+
+    const options = {
+        page: parseInt(page), // Parse page and limit to integers
+        limit: parseInt(limit),
+    };
+
+    try {
+        const result = await Product.aggregatePaginate(aggregate, options); // Use aggregatePaginate
+
+        const newData = {
+            totalDocs: result.totalDocs,
+            limit: result.limit,
+            page: result.page,
+            totalPages: result.totalPages,
+            pagingCounter: result.pagingCounter,
+            hasPrevPage: result.hasPrevPage,
+            hasNextPage: result.hasNextPage,
+            prevPage: result.prevPage,
+            nextPage: result.nextPage
         }
-    ])
 
-    if( !product){
-        return res.status(200).json(
-            new ApiResponse(200, product, "Product not found")
-        )
+        res.status(200).json(
+            new ApiResponse(200, {data: result.docs, newData}, "Products fetched successfully")
+        );
+    } catch (error) {
+        console.error("Error fetching products:", error);
+        res.status(500).json(new ApiResponse(500, null, "Error fetching products"));
     }
-
-    res.status(200).json(
-        new ApiResponse(200, product, "Product fetched successfully")
-    )
-})
+});
 
 const createProduct = asyncHandler ( async (req, res) => {
     const { name, cost, price, discount, discount_price, cat_id, unit_id, seller_id, qty, description } = req.body;
