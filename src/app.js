@@ -30,6 +30,8 @@ import { unitRouter } from './routes/unit.routes.js';
 import { catRouter } from './routes/category.routes.js';
 import { productRouter } from './routes/product.routes.js'
 import {orderRouter} from './routes/order.routes.js'
+import { riderRouter } from './routes/rider.routes.js';
+
 
 // define routes here
 app.use("/api/v1/users", UserRouter);
@@ -38,5 +40,6 @@ app.use("/api/v1/unit", unitRouter);
 app.use("/api/v1/cat", catRouter);
 app.use("/api/v1/pro", productRouter);
 app.use("/api/v1/order", orderRouter);
+app.use("/api/v1/rider", riderRouter);
 
 export { app };
