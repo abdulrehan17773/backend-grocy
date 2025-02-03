@@ -22,6 +22,12 @@ const riderOrderSchema = Schema({
         type: Date,
         default: null
     },
+    area_id: {
+        type: Schema.Types.ObjectId,
+        ref: "SubCity",
+        required: true,
+        index: true
+    },
     totalAmount: {
         type: Number,
         required: true
