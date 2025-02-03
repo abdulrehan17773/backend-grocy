@@ -480,7 +480,7 @@ const activeProduct = asyncHandler ( async (req, res) => {
     }   
 
     res.status(200).json(
-        new ApiResponse(200, null, final)
+        new ApiResponse(200, status, 'Product activated successfully')
     )
 })
 
@@ -515,7 +515,7 @@ const featureProduct = asyncHandler ( async (req, res) => {
     }
 
     res.status(200).json(
-        new ApiResponse(200, null, final)
+        new ApiResponse(200, status, final)
     )
 })
 

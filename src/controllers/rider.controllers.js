@@ -115,7 +115,7 @@ const isActive = asyncHandler(async (req, res) => {
     }
 
     res.status(200).json(
-        new ApiResponse(200, null, "Status updated successfully")
+        new ApiResponse(200, !status, "Status updated successfully")
     )
 
 });
@@ -311,7 +311,7 @@ const switchSession = asyncHandler(async (req, res) => {
     }
 
     res.status(200).json(
-        new ApiResponse(200, null, "Session Updated successfully")
+        new ApiResponse(200, !status, "Session Updated successfully")
     )
 }
 );

@@ -18,6 +18,47 @@ const getCity = asyncHandler( async (req, res) => {
         )
 })
 
+const updateCityStatus = asyncHandler( async (req, res) => {
+    const {id} = req.body;
+
+    const city = await City.findById(id);
+
+    if( !city){
+        res.status(404);
+        throw new ApiError(404, "City not found")
+    }
+
+    const status = city.is_active;
+
+    city.is_active = !status;
+    await city.save({validateBeforeSave: false});
+
+    res.status(200).json(
+        new ApiResponse(200, !status, "City status updated successfully")
+    )
+
+})
+
+const updateSubCityStatus = asyncHandler( async (req, res) => {
+    const {id} = req.body;
+
+    const subCity = await SubCity.findById(id);
+
+    if( !subCity){
+        res.status(404);
+        throw new ApiError(404, "City not found")
+    }
+
+    const status = subCity.is_active;
+
+    subCity.is_active = !status;
+    await subCity.save({validateBeforeSave: false});
+
+    res.status(200).json(
+        new ApiResponse(200, !status, "Sub City status updated successfully")
+    )
+})
+
 const getSubCity = asyncHandler( async (req, res) => {
     const {city_id} = req.body;
     const city = await SubCity.find({$and: [{city_id}, {is_active: true}]}).select("-__v -city_id -is_active -createdAt -updatedAt -deletedAt");
@@ -201,4 +242,96 @@ const updateUserAddress = asyncHandler( async (req, res) => {
 
 })
 
-export { createUserAddress, getCity, getSubCity, getAllUserAddress, deleteUserAddress, updateUserAddress }
+const createSubCity = asyncHandler( async (req, res) => {
+  const {city_id, name} = req.body;
+
+  if( !city_id || !name){
+    res.status(400);
+    throw new ApiError(400, "All fields are required")
+  }
+
+  const city = await City.findById(city_id);
+
+  if( !city){
+    res.status(404);
+    throw new ApiError(404, "City not found")
+  }
+
+  const oldSubCity = await SubCity.findOne({$and: [{city_id}, {name}, {deletedAt: null}]});
+
+  if(oldSubCity){
+    res.status(400);
+    throw new ApiError(400, "Sub City already exists")
+  }
+
+  const newSubCity = await SubCity.create({city_id, name});
+
+  if(!newSubCity){
+    res.status(500);
+    throw new ApiError(500, "Something went wrong")
+  }
+
+  res.status(200).json(
+    new ApiResponse(200, newSubCity, "Sub City created successfully")
+  )
+  
+})
+
+const updateSubCity = asyncHandler( async (req, res) => {
+  const {id, city_id, name} = req.body;
+
+  if( !id || !city_id || !name){
+    res.status(400);
+    throw new ApiError(400, "All fields are required")
+  }
+  
+  const subCity = await SubCity.findById(id);
+  
+  if(!subCity){
+    res.status(400);
+    throw new ApiError(400, "Sub City not found")
+  }
+  
+  const city = await City.findById(city_id);
+
+  if( !city){
+    res.status(404);
+    throw new ApiError(404, "City not found")
+  }
+
+  subCity.city_id = city_id;
+  subCity.name = name;
+  await subCity.save({validateBeforeSave: false});
+
+  res.status(200).json(
+    new ApiResponse(200, subCity, "Sub City Updated successfully")
+  )
+  
+})
+
+const delSubCity = asyncHandler( async (req, res) => {
+  const {id} = req.body;
+
+  if(!id){
+    res.status(400);
+    throw new ApiError(400, "id is required")
+  }
+
+  const subCity = await SubCity.findOne({$and: [{_id:id}, {deletedAt: null}]});
+
+  if(!subCity){
+    res.status(404);
+    throw new ApiError(404, "Sub City not found")
+  }
+
+  subCity.deletedAt = Date.now();
+  await subCity.save({validateBeforeSave: false});
+
+  res.status(200).json(
+    new ApiResponse(200, null, "Sub City deleted successfully")
+  )
+
+})
+
+
+export { createUserAddress, getCity, getSubCity, getAllUserAddress, deleteUserAddress, updateUserAddress, updateCityStatus, updateSubCityStatus, createSubCity, updateSubCity, delSubCity }
