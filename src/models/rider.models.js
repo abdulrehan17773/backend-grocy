@@ -1,4 +1,5 @@
 import mongoose, {Schema} from "mongoose";
+import aggregatePaginate from "mongoose-aggregate-paginate-v2";
 
 const riderSchema = Schema({
     user_id : {
@@ -48,5 +49,7 @@ const riderSchema = Schema({
         default: null
     }
 }, {timestamps: true})
+
+riderSchema.plugin(aggregatePaginate);
 
 export const Rider = mongoose.model("Rider", riderSchema);

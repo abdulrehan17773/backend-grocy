@@ -15,8 +15,12 @@ const riderOrderSchema = Schema({
     },
     status: {
         type: String,
-        enum: ['fetching', 'delivered', 'cancelled'],
+        enum: ['fetching', 'pickup', 'onway', 'delivered', 'cancelled'],
         default: 'fetching'
+    },
+    pickup_time:{
+        type: Date,
+        default: null
     },
     totalAmount: {
         type: Number,
