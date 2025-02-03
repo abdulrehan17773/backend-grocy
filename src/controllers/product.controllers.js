@@ -103,13 +103,112 @@ const getAll = asyncHandler(async (req, res) => {
     }
 });
 
-const createProduct = asyncHandler ( async (req, res) => {
-    const { name, cost, price, discount, discount_price, cat_id, unit_id, seller_id, qty, description } = req.body;
+const getAllAdmin = asyncHandler(async (req, res) => {
+    const { featured,active, page = 1 } = req.body; // Get page and limit from query parameters
+    
+    let limit = 10
 
-    if([name, cost, price, discount_price, cat_id, unit_id, seller_id, description].some(item => !item)){
+    let is_f = {};
+    let is_a = {};
+    if (featured === 'true') { // Important: Check for the string "true"
+        is_f = { is_featured: true };
+    }
+    if (active === 'true') { // Important: Check for the string "true"
+        is_a = { is_active: true };
+    }
+
+    const aggregate = Product.aggregate([ // Your aggregation pipeline
+        {
+            $match: {
+                $and: [
+                    { deletedAt: null },
+                    is_f,
+                    is_a
+                ],
+            },
+        },
+        {
+            $lookup: {
+                from: "categories",
+                localField: "cat_id",
+                foreignField: "_id",
+                as: "category",
+            },
+        },
+        {
+            $unwind: "$category",
+        },
+        {
+            $lookup: {
+                from: "units",
+                localField: "unit_id",
+                foreignField: "_id",
+                as: "unit",
+            },
+        },
+        {
+            $unwind: "$unit",
+        },
+        {
+            $addFields: {
+                category_name: "$category.name",
+                unit_name: "$unit.name",
+            },
+        },
+        {
+            $project: {
+                unit: 0,
+                category: 0,
+                seller_id: 0,
+                __v: 0,
+                createdAt: 0,
+                updatedAt: 0,
+                deletedAt: 0,
+                unit_id: 0,
+                qty: 0,
+                cost: 0,
+            },
+        },
+    ]);
+
+    const options = {
+        page: parseInt(page), // Parse page and limit to integers
+        limit: parseInt(limit),
+    };
+
+    try {
+        const result = await Product.aggregatePaginate(aggregate, options); // Use aggregatePaginate
+
+        const newData = {
+            totalDocs: result.totalDocs,
+            limit: result.limit,
+            page: result.page,
+            totalPages: result.totalPages,
+            pagingCounter: result.pagingCounter,
+            hasPrevPage: result.hasPrevPage,
+            hasNextPage: result.hasNextPage,
+            prevPage: result.prevPage,
+            nextPage: result.nextPage
+        }
+
+        res.status(200).json(
+            new ApiResponse(200, {data: result.docs, newData}, "Products fetched successfully")
+        );
+    } catch (error) {
+        console.error("Error fetching products:", error);
+        res.status(500).json(new ApiResponse(500, null, "Error fetching products"));
+    }
+});
+
+const createProduct = asyncHandler ( async (req, res) => {
+    const { name, cost, price, discount, discount_price, cat_id, unit_id, qty, description } = req.body;
+
+    if([name, cost, price, discount_price, cat_id, unit_id, description].some(item => !item)){
         res.status(400);
         throw new ApiError(400, "All fields are required")
     }
+
+    const { _id } = req.user;
 
     const oldProduct = await Product.findOne({$and: [{name}, {deletedAt: null}]});
 
@@ -149,7 +248,7 @@ const createProduct = asyncHandler ( async (req, res) => {
         throw new ApiError(500, "Something went wrong");
     }
     
-    const product = await Product.create({name, cost, price, discount, discount_price, cat_id, unit_id, seller_id, qty, description, img: uploadedImages })
+    const product = await Product.create({name, cost, price, discount, discount_price, cat_id, unit_id, seller_id: _id, qty, description, img: uploadedImages })
 
     if( !product){
         res.status(500);
@@ -162,12 +261,14 @@ const createProduct = asyncHandler ( async (req, res) => {
 })
 
 const updateProduct = asyncHandler ( async (req, res) => {
-    const {id, name, cost, price, discount, discount_price, cat_id, unit_id, seller_id, qty, description } = req.body;
+    const {id, name, cost, price, discount, discount_price, cat_id, unit_id, qty, description } = req.body;
 
-    if([id, name, cost, price, discount_price, cat_id, unit_id, seller_id, description].some(item => !item)){
+    if([id, name, cost, price, discount_price, cat_id, unit_id, description].some(item => !item)){
         res.status(400);
         throw new ApiError(400, "All fields are required")
     }
+
+    const { _id } = req.user;
 
     const oldProduct = await Product.findById(id);
 
@@ -214,7 +315,7 @@ const updateProduct = asyncHandler ( async (req, res) => {
     oldProduct.discount_price = discount_price;
     oldProduct.cat_id = cat_id;
     oldProduct.unit_id = unit_id
-    oldProduct.seller_id = seller_id;
+    oldProduct.seller_id = _id;
     oldProduct.qty = qty;
     oldProduct.description = description;
     const updated = await oldProduct.save({validateBeforeSave: false});
@@ -418,4 +519,4 @@ const featureProduct = asyncHandler ( async (req, res) => {
     )
 })
 
-export { getAll, createProduct, updateProduct, deleteProduct, activeProduct, featureProduct, deleteImg, updateImg }
+export { getAll, createProduct, updateProduct, deleteProduct, activeProduct, featureProduct, deleteImg, updateImg, getAllAdmin }

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { checkAuth, checkAdmin } from "../middlewares/checkAuth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
-import { getAll, createProduct, updateProduct, deleteProduct, featureProduct, activeProduct, deleteImg, updateImg } from "../controllers/product.controllers.js";
+import { getAll, createProduct, updateProduct, deleteProduct, featureProduct, activeProduct, deleteImg, updateImg, getAllAdmin } from "../controllers/product.controllers.js";
 
 const productRouter = Router();
 
@@ -15,5 +15,6 @@ productRouter.route("/delete").patch(deleteProduct);
 productRouter.route("/active").patch(activeProduct);
 productRouter.route("/featured").patch(featureProduct);
 productRouter.route("/delimg").patch(deleteImg);
+productRouter.route("/getallpro").get(getAllAdmin);
 
 export { productRouter };
