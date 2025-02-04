@@ -2,15 +2,13 @@ import mongoose, {Schema} from "mongoose";
 
 const riderOrderSchema = Schema({
     rider_id: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: "Rider",
-        unique: true,
         index: true
     },
     order_id: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: "Order",
-        unique: true,
         index: true
     },
     status: {

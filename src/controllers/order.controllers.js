@@ -6,9 +6,60 @@ import { OrdersDetails } from "../models/orderDetails.models.js"
 import { Product } from "../models/product.models.js"
 import { SubCity } from "../models/subCity.models.js"
 import { City } from "../models/city.models.js"
+import { RiderOrder } from "../models/riderOrder.models.js"
+import { Rider } from "../models/rider.models.js"
 import mongoose from "mongoose";
 
 
+const checkRider = async (order_id, area_id, totalAmount) => {
+    const existingOrder = await RiderOrder.findOne({ order_id, deletedAt: null });
+    if (existingOrder) {
+        return true; // Order already assigned
+    }
+
+    const riders = await Rider.find({ is_online: true, is_active: true, deletedAt: null });
+
+    // Optimized counting and sorting:
+    const riderOrderCounts = [];
+    for (const rider of riders) {
+        const orderCount = await RiderOrder.countDocuments({
+            rider_id: rider.user_id,
+            deletedAt: null,
+            status: { $in: ['fetching', 'pickup'] } // Use $in for efficiency
+        });
+        riderOrderCounts.push({ rider, count: orderCount });
+    }
+
+    // Sort riders by order count (ascending):
+    riderOrderCounts.sort((a, b) => a.count - b.count);
+
+    // Assign to riders with matching area_id and available capacity (1-3 orders)
+    for (const { rider, count } of riderOrderCounts) {
+        if (count <= 3 && count > 0) { // Check for capacity (1 to 3 orders)
+            const existingRiderOrders = await RiderOrder.find({ rider_id: rider.user_id, deletedAt: null });
+            for (const order of existingRiderOrders) {
+                if (order.area_id === area_id) {
+                    const newOrder = await RiderOrder.create({ rider_id: rider.user_id, order_id, status: 'fetching', area_id, totalAmount });
+                    if (newOrder) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    // Assign to riders with 0 orders:
+    for (const { rider, count } of riderOrderCounts) {
+        if (count === 0) {
+            const newOrder = await RiderOrder.create({ rider_id: rider.user_id, order_id, status: 'fetching', area_id, totalAmount });
+            if (newOrder) {
+                return true;
+            }
+        }
+    }
+
+    return false; // No suitable rider found
+};
 
 const placeOrder = asyncHandler(async (req, res) => {
     const { user_id, address, phone, area_id, note, delivery_charges, total_price, cart } = req.body;
@@ -68,7 +119,8 @@ const placeOrder = asyncHandler(async (req, res) => {
         session.endSession();
 
         res.status(200).json(new ApiResponse(200, null, "Order placed successfully"));
-
+        
+        const algo = checkRider(order_id, area_id, total_price);
     } catch (error) {
         await session.abortTransaction(); // Rollback the transaction on error
         session.endSession();
@@ -76,6 +128,8 @@ const placeOrder = asyncHandler(async (req, res) => {
         res.status(500);
         throw new ApiError(500, "Something went wrong placing the order"); // Generic error message for the client
     }
+
+
 });
 
 const getOrder = asyncHandler(async (req, res) => {
@@ -270,4 +324,169 @@ const orderDetails = asyncHandler(async (req, res) => {
     }
 });
 
-export {placeOrder, getOrder, cancelOrder, orderDetails};
+const preparingOrder = asyncHandler(async (req, res) => {
+    const { order_id } = req.body;
+
+    if( !order_id){
+        res.status(400);
+        throw new ApiError(400, "All fields are required")
+    }
+
+    const order = await Order.findOne({$and: [{order_id}, {deletedAt: null}]});
+
+    if( !order){
+        res.status(404);
+        throw new ApiError(404, "Order not found")
+    }
+
+    order.status = 'preparing';
+    order.preparing_time = Date.now();
+    await order.save({validateBeforeSave: false});
+    
+    const algo = checkRider(order_id, order.area_id, order.total_price);
+
+    let line = "Order preparing successfully"
+    if( !algo) {
+        line = "Status update, please dispatch to rider"
+    }
+    
+    res.status(200).json(
+        new ApiResponse(200, null, line)
+    )
+
+     
+}) 
+
+const readyOrder = asyncHandler(async (req, res) => {
+    const { order_id } = req.body;
+
+    if( !order_id){
+        res.status(400);
+        throw new ApiError(400, "All fields are required")
+    }
+
+    const order = await Order.findOne({$and: [{order_id}, {deletedAt: null}]});
+
+    if( !order){
+        res.status(404);
+        throw new ApiError(404, "Order not found")
+    }
+
+    if(order.status == 'pending'){
+        res.status(400);
+        throw new ApiError(400, "Order is not preparing")
+    }
+
+    order.status = 'ready';
+    order.ready_time = Date.now();
+    await order.save({validateBeforeSave: false});
+
+    
+    const algo = checkRider(order_id, order.area_id, order.total_price);
+
+    let line = "Order ready successfully"
+    if( !algo) {
+        line = "Status update, please dispatch to rider"
+    }
+
+    res.status(200).json(
+        new ApiResponse(200, null, line)
+    )
+     
+})
+
+const rejectOrder = asyncHandler(async (req, res) => {
+    const { order_id, reason } = req.body;
+
+    if( !order_id || !reason){
+        res.status(400);
+        throw new ApiError(400, "All fields are required")
+    }
+
+    const order = await Order.findOne({$and: [{order_id}, {deletedAt: null}]});
+
+    if( !order){
+        res.status(404);
+        throw new ApiError(404, "Order not found")
+    }
+
+    if (order.status === 'cancelled'){
+        res.status(400);
+        throw new ApiError(400, "Order is already cancelled")
+    }
+
+    order.status = 'cancelled';
+    order.reason = reason;
+    order.cancelled_by = 'admin';
+    order.cancelled_at = Date.now();
+
+    const Rider = await RiderOrder.findOne({$and: [{order_id}, {deletedAt: null}]});
+
+    if(Rider){
+        Rider.status = 'cancelled';
+        await Rider.save({validateBeforeSave: false});
+    }
+    await order.save({validateBeforeSave: false});
+
+    res.status(200).json(
+        new ApiResponse(200, null, "Order cancelled successfully")
+    )
+})
+
+const updateRider = asyncHandler(async (req, res) => {
+    const { order_id, pre_rider, rider_id } = req.body;
+    
+    if( !order_id || !rider_id){
+        res.status(400);
+        throw new ApiError(400, "All fields are required")
+    }
+    
+    if( pre_rider == rider_id){
+        res.status(400);
+        throw new ApiError(400, "Rider cannot be same")
+    }
+
+    const order = await Order.findOne({$and: [{order_id}, {deletedAt: null}]});
+
+    if(!order || order.status != 'cancelled' || order.status != 'delivered'){
+        res.status(404);
+        throw new ApiError(404, "Order not found")
+    }
+
+    const rider = await Rider.findOne({$and: [{user_id: rider_id}, {deletedAt: null}]});
+
+    if(!rider){
+        res.status(404);
+        throw new ApiError(404, "New Rider not found")
+    }
+
+    if(!rider.is_online || !rider.is_active){
+        res.status(400);
+        throw new ApiError(400, "Order is not active or online");
+    }
+
+    if(pre_rider){
+        const prevRider = await RiderOrder.findOne({$and: [{order_id}, {rider_id: pre_rider}, {deletedAt: null}]});
+
+        if(!prevRider){
+            res.status(404);
+            throw new ApiError(404, "Previous Rider not found")
+        }
+
+        prevRider.deletedAt = Date.now();
+        await prevRider.save({validateBeforeSave: false});
+    }
+
+    const newOrder = await RiderOrder.create({order_id, rider_id, status: 'fetching', area_id: order.area_id, totalAmount: order.total_price});
+
+    if( !newOrder){
+        res.status(500);
+        throw new ApiError(500, "Something went wrong");
+    }
+
+    res.status(200).json(
+        new ApiResponse(200, newOrder, "Rider updated successfully")
+    )
+})
+
+export {placeOrder, getOrder, cancelOrder, orderDetails, preparingOrder, readyOrder, rejectOrder, updateRider};
