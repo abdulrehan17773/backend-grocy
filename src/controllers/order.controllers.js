@@ -19,26 +19,24 @@ const checkRider = async (order_id, area_id, totalAmount) => {
 
     const riders = await Rider.find({ is_online: true, is_active: true, deletedAt: null });
 
-    // Optimized counting and sorting:
     const riderOrderCounts = [];
     for (const rider of riders) {
         const orderCount = await RiderOrder.countDocuments({
             rider_id: rider.user_id,
             deletedAt: null,
-            status: { $in: ['fetching', 'pickup'] } // Use $in for efficiency
+            status: { $in: ['fetching', 'pickup'] }
         });
         riderOrderCounts.push({ rider, count: orderCount });
     }
 
-    // Sort riders by order count (ascending):
     riderOrderCounts.sort((a, b) => a.count - b.count);
 
-    // Assign to riders with matching area_id and available capacity (1-3 orders)
+    // 1. Try to assign to riders with matching area_id:
     for (const { rider, count } of riderOrderCounts) {
-        if (count <= 3 && count > 0) { // Check for capacity (1 to 3 orders)
-            const existingRiderOrders = await RiderOrder.find({ rider_id: rider.user_id, deletedAt: null });
+        if (count <= 3) { // Capacity check combined
+            const existingRiderOrders = await RiderOrder.find({ rider_id: rider.user_id, deletedAt: null, status: { $in: ['fetching', 'pickup'] } });
             for (const order of existingRiderOrders) {
-                if (order.area_id === area_id) {
+                if (order.area_id.equals(new mongoose.Types.ObjectId(area_id))) { // Correct ObjectId comparison
                     const newOrder = await RiderOrder.create({ rider_id: rider.user_id, order_id, status: 'fetching', area_id, totalAmount });
                     if (newOrder) {
                         return true;
@@ -48,9 +46,9 @@ const checkRider = async (order_id, area_id, totalAmount) => {
         }
     }
 
-    // Assign to riders with 0 orders:
+    // 2. If NO rider with matching area_id is found, assign to ANY rider with capacity (0-3):
     for (const { rider, count } of riderOrderCounts) {
-        if (count === 0) {
+        if (count <= 3) { // Check capacity (0 to 3 orders)
             const newOrder = await RiderOrder.create({ rider_id: rider.user_id, order_id, status: 'fetching', area_id, totalAmount });
             if (newOrder) {
                 return true;
@@ -119,8 +117,6 @@ const placeOrder = asyncHandler(async (req, res) => {
         session.endSession();
 
         res.status(200).json(new ApiResponse(200, null, "Order placed successfully"));
-        
-        const algo = checkRider(order_id, area_id, total_price);
     } catch (error) {
         await session.abortTransaction(); // Rollback the transaction on error
         session.endSession();
@@ -128,7 +124,6 @@ const placeOrder = asyncHandler(async (req, res) => {
         res.status(500);
         throw new ApiError(500, "Something went wrong placing the order"); // Generic error message for the client
     }
-
 
 });
 
@@ -343,7 +338,7 @@ const preparingOrder = asyncHandler(async (req, res) => {
     order.preparing_time = Date.now();
     await order.save({validateBeforeSave: false});
     
-    const algo = checkRider(order_id, order.area_id, order.total_price);
+    const algo = await checkRider(order_id, order.area_id, order.total_price);
 
     let line = "Order preparing successfully"
     if( !algo) {
@@ -382,7 +377,7 @@ const readyOrder = asyncHandler(async (req, res) => {
     await order.save({validateBeforeSave: false});
 
     
-    const algo = checkRider(order_id, order.area_id, order.total_price);
+    const algo = await checkRider(order_id, order.area_id, order.total_price);
 
     let line = "Order ready successfully"
     if( !algo) {
