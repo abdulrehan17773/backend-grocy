@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { registerUser, loginUser, logout, tokenUpdate, currentUser, verifyUser, resendOtp, updatePhone, updateName, updateAvatar, updatePassword, forgetPassword, sendForgetPassword, checkExpiryForget } from "../controllers/user.controllers.js";
+import { registerUser, loginUser, loginRider, loginAdmin, logout, tokenUpdate, currentUser, verifyUser, resendOtp, updatePhone, updateName, updateAvatar, updatePassword, forgetPassword, sendForgetPassword, checkExpiryForget } from "../controllers/user.controllers.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import {checkAuth} from "../middlewares/checkAuth.middleware.js"
 
@@ -8,6 +8,8 @@ const UserRouter = Router();
 // // unsecure routes
 UserRouter.route("/register").post(registerUser);
 UserRouter.route("/login").post(loginUser);
+UserRouter.route("/loginrider").post(loginRider);
+UserRouter.route("/loginadmin").post(loginAdmin);
 
 // secure routes
 UserRouter.route("/refresh-token").post(tokenUpdate);

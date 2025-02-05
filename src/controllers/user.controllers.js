@@ -1,5 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import  { User }  from "../models/user.models.js";
+import { Rider } from "../models/rider.models.js";
+import { Setting } from "../models/setting.models.js";
 import  { ApiError } from "../utils/ApiError.js";
 import ApiResponse from "../utils/ApiResponse.js";
 import { handleUploadFile, deleteFileFromCloudinary } from "../utils/cloudinary.js";
@@ -131,6 +133,108 @@ const loginUser = asyncHandler( async (req, res) => {
         .cookie("accessToken", accessToken, options)
         .json(
             new ApiResponse(200, { user: loginUser, accessToken, refreshToken }, "User logged in successfully")
+        );
+});
+
+const loginRider = asyncHandler( async (req, res) => {
+    const { email, password } = req.body;
+
+    // check if username or email is provided
+    if (!email || !password) {
+        res.status(400);
+        throw new ApiError(400, "email is required");
+    }
+
+    // find user
+    const userExists = await User.findOne({ email });
+
+    // check if user exists
+    if (!userExists) {
+        res.status(404);
+        throw new ApiError(404, "Rider not found");
+    }
+
+    const verifyRider = Rider.findOne({$and: [{rider_id: userExists.uid},{deleted_at: null}]});
+    if(!verifyRider){
+        res.status(401);
+        throw new ApiError(401, "Unauthorized")
+    }
+
+    // match password
+    const passwordMatched = await userExists.comparePassword(password);
+    if (!passwordMatched) {
+        res.status(401);
+        throw new ApiError(401, "Invalid password");
+    }
+    
+    // generate tokens 
+    const { accessToken, refreshToken } = await generateTokens(userExists._id);
+
+    const loginUser = await User.findById(userExists._id).select("-password -refreshToken -__v -createdAt -updatedAt -deletedAt -otp -otp_time");
+
+    if (!loginUser) {
+        res.status(500);
+        throw new ApiError(500, "Server error");
+    }
+
+    await sendEmail(loginUser.email, `Login`, `Login successfully!`)
+
+    return res.status(200)
+        .cookie("refreshToken", refreshToken, options)
+        .cookie("accessToken", accessToken, options)
+        .json(
+            new ApiResponse(200, { user: loginUser, accessToken, refreshToken }, "Rider logged in successfully")
+        );
+});
+
+const loginAdmin = asyncHandler( async (req, res) => {
+    const { email, password } = req.body;
+
+    // check if username or email is provided
+    if (!email || !password) {
+        res.status(400);
+        throw new ApiError(400, "email is required");
+    }
+
+    // find user
+    const userExists = await User.findOne({ email });
+
+    // check if user exists
+    if (!userExists) {
+        res.status(404);
+        throw new ApiError(404, "User not found");
+    }
+
+    const verifyAdmin = Setting.findOne({$and: [{admin_id: userExists.uid},{deleted_at: null}]});
+    if(!verifyAdmin){
+        res.status(401);
+        throw new ApiError(401, "Unauthorized")
+    }
+
+    // match password
+    const passwordMatched = await userExists.comparePassword(password);
+    if (!passwordMatched) {
+        res.status(401);
+        throw new ApiError(401, "Invalid password");
+    }
+
+    // generate tokens 
+    const { accessToken, refreshToken } = await generateTokens(userExists._id);
+
+    const loginUser = await User.findById(userExists._id).select("-password -refreshToken -__v -createdAt -updatedAt -deletedAt -otp -otp_time");
+
+    if (!loginUser) {
+        res.status(500);
+        throw new ApiError(500, "Server error");
+    }
+
+    await sendEmail(loginUser.email, `Login Alert`, `Login successfully on admin!`)
+
+    return res.status(200)
+        .cookie("refreshToken", refreshToken, options)
+        .cookie("accessToken", accessToken, options)
+        .json(
+            new ApiResponse(200, { user: loginUser, accessToken, refreshToken }, "Admin logged in successfully")
         );
 });
 
@@ -504,4 +608,4 @@ const forgetPassword = asyncHandler( async (req, res) => {
     
 });
 
-export { registerUser, loginUser, logout, tokenUpdate, currentUser, verifyUser, resendOtp, updateName, updatePhone, updateAvatar, updatePassword,forgetPassword, sendForgetPassword, checkExpiryForget };
+export { registerUser, loginUser, loginRider, loginAdmin, logout, tokenUpdate, currentUser, verifyUser, resendOtp, updateName, updatePhone, updateAvatar, updatePassword,forgetPassword, sendForgetPassword, checkExpiryForget };

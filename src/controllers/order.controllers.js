@@ -339,7 +339,6 @@ const orderDetails = asyncHandler(async (req, res) => {
             }
         ]);
 
-        console.log(order)
         if (!order || order.length === 0) {
             res.status(404);
             throw new ApiError(404, "Order not found");

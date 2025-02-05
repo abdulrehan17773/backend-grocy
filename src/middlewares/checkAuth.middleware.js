@@ -1,9 +1,9 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import  { User }  from "../models/user.models.js";
+import { Rider } from "../models/rider.models.js";
+import { Setting } from "../models/setting.models.js";
 import  { ApiError } from "../utils/ApiError.js";
 import jwt from "jsonwebtoken";
-
-const grocyRole = ['user', 'admin', 'rider']
 
 const checkAuth = asyncHandler( async(req, _, next) => {
 
@@ -30,15 +30,12 @@ const checkAuth = asyncHandler( async(req, _, next) => {
 const checkAdmin = asyncHandler( async(req, _, next) => {
 
     // get token
-    const {role} = req.user
-    if(!role){
-        throw new ApiError(401, "Unauthorized");
-    }
-
-    const admin = role.indexOf('admin');
-
-    if(admin < 0){
-        throw new ApiError(401, "Unauthorized");
+    const {uid} = req.user
+    
+    const verifyAdmin = Setting.findOne({$and: [{admin_id: uid},{deleted_at: null}]});
+    if(!verifyAdmin){
+        res.status(401);
+        throw new ApiError(401, "Unauthorized")
     }
 
     next();
@@ -47,15 +44,12 @@ const checkAdmin = asyncHandler( async(req, _, next) => {
 const checkRider = asyncHandler( async(req, _, next) => {
 
     // get token
-    const {role} = req.user
-    if(!role){
-        throw new ApiError(401, "Unauthorized");
-    }
-
-    const rider = role.indexOf('rider');
-
-    if(rider < 0){
-        throw new ApiError(401, "Unauthorized");
+    const {uid} = req.user
+    
+    const verifyRider = Rider.findOne({$and: [{rider_id: uid},{deleted_at: null}]});
+    if(!verifyRider){
+        res.status(401);
+        throw new ApiError(401, "Unauthorized")
     }
 
     next();
