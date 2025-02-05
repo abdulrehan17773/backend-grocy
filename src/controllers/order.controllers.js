@@ -11,7 +11,7 @@ import { Rider } from "../models/rider.models.js"
 import mongoose from "mongoose";
 
 
-const checkRider = async (order_id, area_id, totalAmount) => {
+const checkRider = async (order_id, area_id, totalAmount = 0) => {
     const existingOrder = await RiderOrder.findOne({ order_id, deletedAt: null });
     if (existingOrder) {
         return true; // Order already assigned
@@ -338,7 +338,7 @@ const preparingOrder = asyncHandler(async (req, res) => {
     order.preparing_time = Date.now();
     await order.save({validateBeforeSave: false});
     
-    const algo = await checkRider(order_id, order.area_id, order.total_price);
+    const algo = await checkRider(order_id, order.area_id);
 
     let line = "Order preparing successfully"
     if( !algo) {
@@ -377,7 +377,7 @@ const readyOrder = asyncHandler(async (req, res) => {
     await order.save({validateBeforeSave: false});
 
     
-    const algo = await checkRider(order_id, order.area_id, order.total_price);
+    const algo = await checkRider(order_id, order.area_id);
 
     let line = "Order ready successfully"
     if( !algo) {
@@ -398,7 +398,7 @@ const rejectOrder = asyncHandler(async (req, res) => {
         throw new ApiError(400, "All fields are required")
     }
 
-    const order = await Order.findOne({$and: [{order_id}, {deletedAt: null}]});
+    const order = await Order.findOne({$and: [{order_id}, {deletedAt: null},{ status: { $ne: 'delivered' }}]});
 
     if( !order){
         res.status(404);
@@ -415,11 +415,17 @@ const rejectOrder = asyncHandler(async (req, res) => {
     order.cancelled_by = 'admin';
     order.cancelled_at = Date.now();
 
-    const Rider = await RiderOrder.findOne({$and: [{order_id}, {deletedAt: null}]});
+    const rider = await RiderOrder.findOne({$and: [{order_id}, {deletedAt: null}]});
 
-    if(Rider){
-        Rider.status = 'cancelled';
-        await Rider.save({validateBeforeSave: false});
+    if(rider){
+        rider.status = 'cancelled';
+
+        const riderpayment = await Rider.save({validateBeforeSave: false});
+
+        if( !riderpayment){
+            res.status(500);
+            throw new ApiError(500, "Something went wrong")
+        }
     }
     await order.save({validateBeforeSave: false});
 
@@ -469,7 +475,11 @@ const updateRider = asyncHandler(async (req, res) => {
         }
 
         prevRider.deletedAt = Date.now();
-        await prevRider.save({validateBeforeSave: false});
+        const updated = await prevRider.save({validateBeforeSave: false});
+        if( !updated){
+            res.status(500);
+            throw new ApiError(500, "Something went wrong")
+        }
     }
 
     const newOrder = await RiderOrder.create({order_id, rider_id, status: 'fetching', area_id: order.area_id, totalAmount: order.total_price});

@@ -4,6 +4,8 @@ import ApiResponse from "../utils/ApiResponse.js";
 import { User } from "../models/user.models.js";
 import { Rider } from "../models/rider.models.js";
 import { handleUploadFile, deleteFileFromCloudinary } from "../utils/cloudinary.js";
+import { RiderOrder } from "../models/riderOrder.models.js";
+import { Order } from "../models/order.models.js";
 import mongoose from "mongoose";
 import sendEmail from "../utils/email.js";
 
@@ -406,4 +408,135 @@ const getRiders = asyncHandler(async (req, res) => {
     )
 });
 
-export { createRider, isActive, updateCardBack, updateCardFront, updateLicenseFront, updateLicenseBack, switchSession, updateRider, getRiders } 
+const pickupOrder = asyncHandler(async (req, res) => {
+    const { order_id } = req.body;
+
+    const riderOrder = await RiderOrder.findOne({ $and: [{ order_id }, { deletedAt: null }, {status: 'fetching' }] });
+
+    if( !riderOrder){
+        res.status(404);
+        throw new ApiError(404, "Order not found!");
+    }
+
+    const order = await Order.findOne({ $and: [{ order_id }, { deletedAt: null }, {status: 'ready'}] });
+
+    if( !order){
+        res.status(404);
+        throw new ApiError(404, "Order not found");
+    }
+
+    riderOrder.status = 'pickup';
+    riderOrder.pickup_time = Date.now();
+    const updated = await riderOrder.save({validateBeforeSave: false});
+
+    if( !updated){
+        res.status(500);
+        throw new ApiError(500, "Something went wrong")
+    }
+
+    res.status(200).json(
+        new ApiResponse(200, null, "Order picked up successfully")
+    )
+
+})
+
+const onwayOrder = asyncHandler(async (req, res) => {
+    const { order_id } = req.body;
+
+    const riderOrder = await RiderOrder.findOne({ $and: [{ order_id }, { deletedAt: null }, {status: 'pickup' }] });
+
+    if( !riderOrder){
+        res.status(404);
+        throw new ApiError(404, "Order not found");
+    }
+
+    const order = await Order.findOne({$and: [{ order_id }, { deletedAt: null }, {status: 'ready' }]})
+    
+    if( !order){
+        res.status(404);
+        throw new ApiError(404, "Order not found");
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        order.status = 'onway';
+        const orderSave = await order.save({ validateBeforeSave: false, session });
+
+        riderOrder.status = 'onway';
+        const riderOrderSave = await riderOrder.save({ validateBeforeSave: false, session });
+
+        if( !orderSave || !riderOrderSave){
+            await session.abortTransaction();
+            session.endSession();
+            res.status(500);
+            throw new ApiError(500, "Something went wrong")
+        }
+
+        await session.commitTransaction();
+        session.endSession();
+
+        res.status(200).json(
+            new ApiResponse(200, null, "Order onway successfully")
+        )
+    } catch (error) {
+        console.log(error);
+        await session.abortTransaction();
+        session.endSession();
+        res.status(500);
+        throw new ApiError(500, "Something went wrong")
+
+    }
+})
+
+const deliveredOrder = asyncHandler(async (req, res) => {
+    const { order_id } = req.body;
+
+    const riderOrder = await RiderOrder.findOne({ $and: [{ order_id }, { deletedAt: null}, {status: 'onway'}]})
+
+    if( !riderOrder){
+        res.status(404);
+        throw new ApiError(404, "Order not found");
+    }
+
+    const order = await Order.findOne({ $and: [{ order_id }, { deletedAt: null}, {status: 'onway'}]})
+
+    if( !order){
+        res.status(404);
+        throw new ApiError(404, "Order not found");
+    }
+    
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        order.status = 'delivered';
+        const orderSave = await order.save({ validateBeforeSave: false, session })
+
+        riderOrder.status = 'delivered';
+        riderOrder.totalAmount = order.total_price;
+        const riderOrderSave = await riderOrder.save({ validateBeforeSave: false, session });
+
+        if( !orderSave || !riderOrderSave){
+            await session.abortTransaction();
+            session.endSession();
+            res.status(500);
+            throw new ApiError(500, "Something went wrong")
+        }
+
+        await session.commitTransaction();
+        session.endSession();
+
+        res.status(200).json(
+            new ApiResponse(200, null, "Order delivered successfully")
+        )
+    } catch (error) {
+        console.log(error);
+        await session.abortTransaction();
+        session.endSession();
+        res.status(500);
+        throw new ApiError(500, "Something went wrong")
+
+    }
+})
+
+export { createRider, isActive, updateCardBack, updateCardFront, updateLicenseFront, updateLicenseBack, switchSession, updateRider, getRiders, pickupOrder, onwayOrder, deliveredOrder } 
