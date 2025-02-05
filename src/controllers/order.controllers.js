@@ -247,11 +247,11 @@ const orderDetails = asyncHandler(async (req, res) => {
             {
                 $lookup: {
                     from: "ordersdetails",
-                    let: { order_id: "$order_id" }, // Define a variable for order_id
+                    let: { order_id: "$order_id" },
                     pipeline: [
                         {
                             $match: {
-                                $expr: { $eq: ["$order_id", "$$order_id"] } ,
+                                $expr: { $eq: ["$order_id", "$$order_id"] },
                                 deletedAt: null
                             }
                         },
@@ -263,13 +263,13 @@ const orderDetails = asyncHandler(async (req, res) => {
                                 as: "product"
                             }
                         },
-                        { $unwind: "$product" } // Unwind the product array if needed
+                        { $unwind: "$product" }
                     ],
                     as: "orderDetails"
                 }
             },
             {
-                $addFields: { 
+                $addFields: {
                     details: {
                         $map: {
                             input: "$orderDetails",
@@ -277,13 +277,46 @@ const orderDetails = asyncHandler(async (req, res) => {
                             in: {
                                 name: "$$orderDetail.product.name",
                                 img: "$$orderDetail.product.img",
-                                qty: "$$orderDetail.qty", // Access qty from orderDetail
-                                price: "$$orderDetail.price" // Access price from orderDetail
+                                qty: "$$orderDetail.qty",
+                                price: "$$orderDetail.price"
                             }
                         }
                     }
                 }
             },
+            {
+                $lookup: {
+                    from: "riderorders",
+                    let: { order_id: "$order_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $eq: ["$order_id", "$$order_id"] },
+                                deletedAt: null,
+                                status: { $nin: ["cancelled", "delivered"] }
+                            }
+                        },
+                        {
+                            $lookup: {
+                                from: "riders",
+                                localField: "rider_id",
+                                foreignField: "user_id",
+                                as: "riderDetails"
+                            }
+                        },
+                        { $unwind: { path: "$riderDetails", preserveNullAndEmptyArrays: true } },
+                        {
+                            $project: {
+                                _id: 0,
+                                name: "$riderDetails.name",
+                                phone: "$riderDetails.phone",
+                            }
+                        }
+                    ],
+                    as: "rider"
+                }
+            },
+            { $unwind: { path: "$rider", preserveNullAndEmptyArrays: true } },
             {
                 $project: {
                     details: 1,
@@ -292,7 +325,7 @@ const orderDetails = asyncHandler(async (req, res) => {
                     phone: 1,
                     status: 1,
                     total_price: 1,
-                    delivery_charges: 1,
+                    delivered_charges: 1,
                     note: 1,
                     reason: 1,
                     cancelled_by: 1,
@@ -300,22 +333,23 @@ const orderDetails = asyncHandler(async (req, res) => {
                     createdAt: 1,
                     delivered_time: 1,
                     paid_by: 1,
+                    rider: 1,
                     _id: 0
                 }
             }
         ]);
 
+        console.log(order)
         if (!order || order.length === 0) {
             res.status(404);
             throw new ApiError(404, "Order not found");
         }
 
-        res.status(200).json(
-            new ApiResponse(200, order[0], "Order fetched successfully") // Access the first element
-        );
+        res.status(200).json(new ApiResponse(200, order[0], "Order fetched successfully"));
+
     } catch (error) {
-        console.error("Error fetching order:", error);
-        res.status(500).json(new ApiResponse(500, null, "Error fetching order"));
+        console.error("Error fetching order:", error); // Log the error for debugging
+        res.status(500).json(new ApiResponse(500, null, "Error fetching order")); // Consistent JSON error response
     }
 });
 
