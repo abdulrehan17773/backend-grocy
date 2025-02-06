@@ -6,9 +6,49 @@ import { Rider } from "../models/rider.models.js";
 import { handleUploadFile, deleteFileFromCloudinary } from "../utils/cloudinary.js";
 import { RiderOrder } from "../models/riderOrder.models.js";
 import { Order } from "../models/order.models.js";
+import { Shift } from "../models/shift.models.js";
+import { Setting } from "../models/setting.models.js";
 import mongoose from "mongoose";
 import sendEmail from "../utils/email.js";
 
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0); // Set to the beginning of the day
+    
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999); // Set to the end of the day
+    
+    function formatMilliseconds(milliseconds) {
+        const totalSeconds = Math.floor(milliseconds / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+    
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    function calculateDailyOnlineTime(onlinePeriods) {
+        let totalDailyTime = 0;
+    
+        if (onlinePeriods.length === 0) {
+            return 0;
+        }
+    
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);  // Start of today
+    
+        for (const period of onlinePeriods) {
+            const periodStart = new Date(period.start);
+    
+            if (periodStart >= today) { // Check if the period is from today
+                const periodEnd = period.end ? new Date(period.end) : new Date(); // Use now if ongoing
+                totalDailyTime += periodEnd.getTime() - periodStart.getTime();
+            }
+    
+        }
+        return Math.floor(totalDailyTime / (60 * 60 * 1000)); // Return time in hours
+    
+    }
 
 const createRider = asyncHandler(async (req, res) => {
     const { name, phone, email, address } = req.body;
@@ -108,7 +148,23 @@ const isActive = asyncHandler(async (req, res) => {
     let status = rider.is_active;
 
     rider.is_active = !status;
-    rider.is_online = false;
+
+    if(rider.is_online){
+        rider.is_online = false;
+
+        const shift = await Shift.findOne({
+            rider_id: user_id,
+            deletedAt: null,
+            createdAt: { $gte: startOfDay, $lte: endOfDay }
+        }).sort({ createdAt: -1 }).limit(1); // Find the most recent shift today
+
+        shift.end_time = Date.now();
+        const updatedShift = await shift.save({ validateBeforeSave: false });
+
+        if (!updatedShift) {
+            throw new Error("Failed to update shift"); // Re-throw the error to be caught by the outer try/catch
+        }
+    }
     const updated = await rider.save({validateBeforeSave: false});
 
     if( !updated){
@@ -290,33 +346,75 @@ const updateLicenseBack = asyncHandler(async (req, res) => {
 const switchSession = asyncHandler(async (req, res) => {
     const { uid } = req.user;
 
-    const rider = await Rider.findOne({ $and: [{ user_id: uid }, { deletedAt: null }] });
+    const session = await mongoose.startSession(); // Start a Mongoose session
+    session.startTransaction(); // Start a transaction
 
-    if( !rider){
+    const rider = await Rider.findOne({ $and: [{ user_id: uid }, { deletedAt: null }] }).session(session);
+
+    if (!rider) {
         res.status(404);
         throw new ApiError(404, "Rider not found");
     }
 
-    if( !rider.is_active){
+    if (!rider.is_active) {
         res.status(400);
         throw new ApiError(400, "Rider is not active");
     }
 
     const status = rider.is_online;
+    
+    try {
 
-    rider.is_online = !status;
-    const updated = await rider.save({validateBeforeSave: false});
+        if (status) { // Rider is online (ending shift)
+            const shift = await Shift.findOne({
+                rider_id: uid,
+                deletedAt: null,
+                createdAt: { $gte: startOfDay, $lte: endOfDay }
+            }).sort({ createdAt: -1 }).limit(1).session(session); // Find the most recent shift today
 
-    if( !updated){
+            if (!shift) {
+                res.status(400);
+                throw new ApiError(400, "No active shift found for today"); // More specific error
+            }
+
+            shift.end_time = Date.now();
+            const updatedShift = await shift.save({ validateBeforeSave: false, session });
+
+            if (!updatedShift) {
+                throw new Error("Failed to update shift"); // Re-throw the error to be caught by the outer try/catch
+            }
+
+        } else { // Rider is offline (starting shift)
+            const newShift = new Shift({ rider_id: uid, start_time: Date.now() }); // Create Shift document
+            const createdShift = await newShift.save({ session });
+
+            if (!createdShift) {
+                throw new Error("Failed to create new shift"); // Re-throw the error
+            }
+        }
+
+        rider.is_online = !status;
+        const updatedRider = await rider.save({ validateBeforeSave: false, session });
+
+        if (!updatedRider) {
+            throw new Error("Failed to update rider status"); // Re-throw the error
+        }
+
+        await session.commitTransaction(); // Commit the transaction
+        session.endSession();
+
+        res.status(200).json(
+            new ApiResponse(200, !status, "Session Updated successfully")
+        );
+
+    } catch (innerError) {
+        await session.abortTransaction(); // Rollback if any error in the inner try block
+        session.endSession();
+        console.error("Transaction error:", innerError);  // Log the error for debugging
         res.status(500);
-        throw new ApiError(500, "Something went wrong")
+        throw new ApiError(500, "Something went wrong during session update"); // Generic error message
     }
-
-    res.status(200).json(
-        new ApiResponse(200, !status, "Session Updated successfully")
-    )
-}
-);
+});
 
 const updateRider = asyncHandler(async (req, res) => {
     const {user_id, name, phone, address } = req.body;
@@ -539,4 +637,201 @@ const deliveredOrder = asyncHandler(async (req, res) => {
     }
 })
 
-export { createRider, isActive, updateCardBack, updateCardFront, updateLicenseFront, updateLicenseBack, switchSession, updateRider, getRiders, pickupOrder, onwayOrder, deliveredOrder } 
+const riderTime = asyncHandler(async (req, res) => {
+    const { uid } = req.user;
+
+    try {
+        const rider = await Rider.findOne({ $and: [{ user_id: uid }, { deletedAt: null }] });
+
+        if (!rider) {
+            res.status(404);
+            throw new ApiError(404, "Rider not found");
+        }
+
+        const shifts = await Shift.find({
+            rider_id: uid,
+            deletedAt: null,
+            createdAt: { $gte: startOfDay, $lte: endOfDay }
+        }).sort({ createdAt: 1 }); // Sort by start time
+
+        let totalOnlineTime = 0;
+
+        if (shifts.length > 0) {
+            for (const shift of shifts) {
+                const startTime = shift.start_time.getTime();
+                const endTime = shift.end_time ? shift.end_time.getTime() : Date.now();
+
+                totalOnlineTime += endTime - startTime;
+            }
+        }
+
+        const formattedTotalOnlineTime = formatMilliseconds(totalOnlineTime);
+
+        res.status(200).json(new ApiResponse(200, {
+            formattedTotalOnlineTime
+        }, "Rider time retrieved successfully"));
+
+    } catch (error) {
+        console.error("Error getting rider time:", error);
+        res.status(500);
+        throw new ApiError(500, "Something went wrong");
+    }
+});
+
+const adminriderTime = asyncHandler(async (req, res) => {
+    const {rider_id, date } = req.body;
+
+    if(!rider_id){
+        res.status(404);
+        throw new ApiError(404, "Rider not found");
+    }
+    try {
+        const rider = await Rider.findOne({ $and: [{ user_id: rider_id }, { deletedAt: null }] });
+
+        if (!rider) {
+            res.status(404);
+            throw new ApiError(404, "Rider not found");
+        }
+
+
+        const targetDate = date ? new Date(date) : new Date();
+        if (isNaN(targetDate)) {
+            res.status(400);
+            throw new ApiError(400, "Invalid date format. Please use YYYY-MM-DD.");
+        }
+
+        const startDay = new Date(targetDate);
+        startDay.setHours(0, 0, 0, 0);
+
+        const endDay = new Date(targetDate);
+        endDay.setHours(23, 59, 59, 999);
+
+
+        const shifts = await Shift.find({
+            rider_id,
+            deletedAt: null,
+            createdAt: { $gte: startDay, $lte: endDay }
+        }).sort({ createdAt: 1 }); // Sort by start time
+
+        let totalOnlineTime = 0;
+        const onlinePeriods = [];
+
+        if (shifts.length > 0) {
+            for (const shift of shifts) {
+                const startTime = shift.start_time.getTime();
+                const endTime = shift.end_time ? shift.end_time.getTime() : Date.now();
+
+                totalOnlineTime += endTime - startTime;
+                onlinePeriods.push({ start: shift.start_time, end: shift.end_time || null }); // Include end time or null if ongoing
+            }
+        }
+
+        const formattedTotalOnlineTime = formatMilliseconds(totalOnlineTime);
+
+        res.status(200).json(new ApiResponse(200, {
+            formattedTotalOnlineTime,
+            onlinePeriods
+        }, "Rider time retrieved successfully"));
+
+    } catch (error) {
+        console.error("Error getting rider time:", error);
+        res.status(500);
+        throw new ApiError(500, "Something went wrong");
+    }
+});
+
+const getpreTime = asyncHandler(async (req, res) => {
+    const { rider_id } = req.body; // Remove page and limit
+
+    if (!rider_id) {
+        res.status(400);
+        throw new ApiError(400, "Rider ID is required");
+    }
+
+    try {
+        const rider = await Rider.findOne({ $and: [{ user_id: rider_id }, { deletedAt: null }] });
+
+        if (!rider) {
+            res.status(404);
+            throw new ApiError(404, "Rider not found");
+        }
+
+        const currentDate = new Date();
+        const startDate = new Date(currentDate);
+        startDate.setDate(currentDate.getDate() - 40); // 40 days ago
+        startDate.setHours(0, 0, 0, 0);
+
+        const shifts = await Shift.find({
+            rider_id,
+            deletedAt: null,
+            createdAt: { $gte: startDate, $lte: currentDate } // Limit to last 40 days
+        }).sort({ createdAt: 1 }); // No pagination
+
+        const dailyData = {};
+        let totalOnlineTime = 0;
+
+        if (shifts.length > 0) {
+            for (const shift of shifts) {
+                const startTime = shift.start_time.getTime();
+                const endTime = shift.end_time ? shift.end_time.getTime() : Date.now();
+
+                totalOnlineTime += endTime - startTime;
+
+                const shiftDate = new Date(shift.createdAt);
+                const formattedDate = shiftDate.toISOString().split('T')[0];
+
+                if (!dailyData[formattedDate]) {
+                    dailyData[formattedDate] = {
+                        totalDailyTime: 0,
+                        status: false,
+                    };
+                }
+
+                dailyData[formattedDate].totalDailyTime += endTime - startTime;
+            }
+        }
+
+        const formattedTotalOnlineTime = formatMilliseconds(totalOnlineTime);
+
+        const shiftTimeSetting = await Setting.findOne({ key: "shift_time" });
+        const requiredShiftTime = shiftTimeSetting ? shiftTimeSetting.value : 9;
+
+        for (const date in dailyData) {
+            const dailyTimeInHours = Math.floor(dailyData[date].totalDailyTime / (60 * 60 * 1000));
+            dailyData[date].totalDailyTime = formatMilliseconds(dailyData[date].totalDailyTime);
+            dailyData[date].status = dailyTimeInHours >= requiredShiftTime;
+        }
+
+        // Ensure exactly 40 days of data (with dummy data if needed)
+        const allDates = [];
+        for (let i = 0; i < 40; i++) {
+            const date = new Date(currentDate);
+            date.setDate(currentDate.getDate() - i);
+            allDates.push(date.toISOString().split('T')[0]);
+        }
+
+        const completeDailyData = {};
+        allDates.forEach(date => {
+            if (dailyData[date]) {
+                completeDailyData[date] = dailyData[date];
+            } else {
+                completeDailyData[date] = {
+                    totalDailyTime: "00:00:00",
+                    status: false
+                };
+            }
+        });
+
+        res.status(200).json(new ApiResponse(200, {
+            dailyData: completeDailyData
+        }, "Rider time retrieved successfully"));
+
+    } catch (error) {
+        console.error("Error getting rider time:", error);
+        res.status(500);
+        throw new ApiError(500, "Something went wrong");
+    }
+});
+
+
+export { createRider, isActive, updateCardBack, updateCardFront, updateLicenseFront, updateLicenseBack, switchSession, updateRider, getRiders, pickupOrder, onwayOrder, deliveredOrder, riderTime, adminriderTime, getpreTime } 
