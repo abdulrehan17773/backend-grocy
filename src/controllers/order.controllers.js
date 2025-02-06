@@ -20,17 +20,35 @@ const checkRider = async (order_id, area_id, totalAmount = 0) => {
     const riders = await Rider.find({ is_online: true, is_active: true, deletedAt: null });
 
     const riderOrderCounts = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Start of today
+
     for (const rider of riders) {
+
         const orderCount = await RiderOrder.countDocuments({
             rider_id: rider.user_id,
             deletedAt: null,
-            status: { $in: ['fetching', 'pickup'] }
+            status: { $nin: ['delivered', 'cancelled'] },
+            createdAt: { $gte: today }
         });
-        riderOrderCounts.push({ rider, count: orderCount });
+        
+        const fetchingOrPickupCount = await RiderOrder.countDocuments({
+            rider_id: rider.user_id,
+            deletedAt: null,
+            status: { $in: ['fetching', 'pickup'] },
+            createdAt: { $gte: today }
+        });
+
+        console.log(orderCount, fetchingOrPickupCount)
+
+        if(orderCount > 0 && fetchingOrPickupCount > 0){
+            riderOrderCounts.push({ rider, count: orderCount });
+        } else if(orderCount == 0){
+            riderOrderCounts.push({ rider, count: orderCount });
+        }
     }
-
     riderOrderCounts.sort((a, b) => a.count - b.count);
-
+    console.log(riderOrderCounts)
     // 1. Try to assign to riders with matching area_id:
     for (const { rider, count } of riderOrderCounts) {
         if (count <= 3) { // Capacity check combined
