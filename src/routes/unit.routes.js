@@ -4,8 +4,7 @@ import { getAllUnit, createUnit, delUnit, updateUnit } from "../controllers/unit
 
 const unitRouter = router();
 
-unitRouter.use(checkAuth)
-unitRouter.use(checkAdmin)
+unitRouter.use(checkAuth, checkAdmin)
 unitRouter.route("/getall").get(getAllUnit)
 unitRouter.route("/create").post(createUnit)
 unitRouter.route("/delete").patch(delUnit)

@@ -6,8 +6,7 @@ import { getAll, createProduct, updateProduct, deleteProduct, featureProduct, ac
 const productRouter = Router();
 
 productRouter.route("/getall").get(getAll);
-productRouter.use(checkAuth);
-productRouter.use(checkAdmin);
+productRouter.use(checkAuth, checkAdmin);
 productRouter.route("/create").post(upload.array("img"), createProduct);
 productRouter.route("/update").patch(upload.array("img"), updateProduct);
 productRouter.route("/updateimg").patch(upload.single("img"), updateImg);

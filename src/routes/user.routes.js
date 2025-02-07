@@ -10,8 +10,6 @@ UserRouter.route("/register").post(registerUser);
 UserRouter.route("/login").post(loginUser);
 UserRouter.route("/loginrider").post(loginRider);
 UserRouter.route("/loginadmin").post(loginAdmin);
-
-// secure routes
 UserRouter.route("/refresh-token").post(tokenUpdate);
 UserRouter.route("/verification").post(verifyUser);
 UserRouter.route("/resend-otp").post(resendOtp);
