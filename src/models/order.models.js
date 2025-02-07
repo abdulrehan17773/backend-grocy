@@ -35,7 +35,7 @@ const orderSchema = new Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'preparing', 'ready', 'onway', 'delivered', 'cancelled'],
+        enum: ['pending', 'preparing', 'ready', 'pickup', 'onway', 'delivered', 'cancelled'],
         default: 'pending'
     },
     preparing_time: {
@@ -43,6 +43,10 @@ const orderSchema = new Schema({
         default: null
     },
     ready_time: {
+        type: Date,
+        default: null
+    },
+    pickup_time: {
         type: Date,
         default: null
     },

@@ -1,7 +1,7 @@
 import { Router } from "express"
 import { checkAuth, checkRider, checkAdmin } from "../middlewares/checkAuth.middleware.js"
 import { upload } from "../middlewares/multer.middleware.js"
-import { createRider, isActive, updateLicenseFront, updateLicenseBack, updateCardFront, updateCardBack, switchSession, updateRider, getRiders,pickupOrder, onwayOrder, deliveredOrder, riderTime, adminriderTime, getpreTime } from "../controllers/rider.controllers.js"
+import { createRider, isActive, updateLicenseFront, updateLicenseBack, updateCardFront, updateCardBack, switchSession, updateRider, getRiders,pickupOrder, onwayOrder, deliveredOrder, riderTime, adminriderTime, getpreTime, getRiderOrders, getRiderhistory, getSingleOrder } from "../controllers/rider.controllers.js"
 
 const riderRouter = Router();
 
@@ -28,5 +28,8 @@ riderRouter.route( "/pickup").patch(pickupOrder);
 riderRouter.route( "/onway").patch(onwayOrder);
 riderRouter.route( "/delivered").patch(deliveredOrder);
 riderRouter.route( "/shifttime").get(riderTime);
+riderRouter.route( "/riderorders").get(getRiderOrders);
+riderRouter.route( "/riderhistory").get(getRiderhistory);
+riderRouter.route( "/singleorder/:order_id").get(getSingleOrder);
 
 export {riderRouter}

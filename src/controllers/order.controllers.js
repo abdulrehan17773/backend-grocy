@@ -471,7 +471,7 @@ const rejectOrder = asyncHandler(async (req, res) => {
     if(rider){
         rider.status = 'cancelled';
 
-        const riderpayment = await Rider.save({validateBeforeSave: false});
+        const riderpayment = await rider.save({validateBeforeSave: false});
 
         if( !riderpayment){
             res.status(500);

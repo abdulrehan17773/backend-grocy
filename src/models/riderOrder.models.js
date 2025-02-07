@@ -16,10 +16,6 @@ const riderOrderSchema = Schema({
         enum: ['fetching', 'pickup', 'onway', 'delivered', 'cancelled'],
         default: 'fetching'
     },
-    pickup_time:{
-        type: Date,
-        default: null
-    },
     area_id: {
         type: Schema.Types.ObjectId,
         ref: "SubCity",

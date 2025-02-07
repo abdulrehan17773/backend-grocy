@@ -12,6 +12,7 @@ import mongoose from "mongoose";
 import sendEmail from "../utils/email.js";
 
 
+
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0); // Set to the beginning of the day
     
@@ -513,38 +514,6 @@ const pickupOrder = asyncHandler(async (req, res) => {
 
     if( !riderOrder){
         res.status(404);
-        throw new ApiError(404, "Order not found!");
-    }
-
-    const order = await Order.findOne({ $and: [{ order_id }, { deletedAt: null }, {status: 'ready'}] });
-
-    if( !order){
-        res.status(404);
-        throw new ApiError(404, "Order not found");
-    }
-
-    riderOrder.status = 'pickup';
-    riderOrder.pickup_time = Date.now();
-    const updated = await riderOrder.save({validateBeforeSave: false});
-
-    if( !updated){
-        res.status(500);
-        throw new ApiError(500, "Something went wrong")
-    }
-
-    res.status(200).json(
-        new ApiResponse(200, null, "Order picked up successfully")
-    )
-
-})
-
-const onwayOrder = asyncHandler(async (req, res) => {
-    const { order_id } = req.body;
-
-    const riderOrder = await RiderOrder.findOne({ $and: [{ order_id }, { deletedAt: null }, {status: 'pickup' }] });
-
-    if( !riderOrder){
-        res.status(404);
         throw new ApiError(404, "Order not found");
     }
 
@@ -558,7 +527,58 @@ const onwayOrder = asyncHandler(async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
+        order.status = 'pickup';
+        order.pickup_time = Date.now();
+        const orderSave = await order.save({ validateBeforeSave: false, session });
+
+        riderOrder.status = 'pickup';
+        const riderOrderSave = await riderOrder.save({ validateBeforeSave: false, session });
+
+        if( !orderSave || !riderOrderSave){
+            await session.abortTransaction();
+            session.endSession();
+            res.status(500);
+            throw new ApiError(500, "Something went wrong")
+        }
+
+        await session.commitTransaction();
+        session.endSession();
+
+        res.status(200).json(
+            new ApiResponse(200, null, "Order Pickup successfully")
+        )
+    } catch (error) {
+        console.log(error);
+        await session.abortTransaction();
+        session.endSession();
+        res.status(500);
+        throw new ApiError(500, "Something went wrong")
+
+    }
+})
+
+const onwayOrder = asyncHandler(async (req, res) => {
+    const { order_id } = req.body;
+
+    const riderOrder = await RiderOrder.findOne({ $and: [{ order_id }, { deletedAt: null }, {status: 'pickup' }] });
+
+    if( !riderOrder){
+        res.status(404);
+        throw new ApiError(404, "Order not found");
+    }
+
+    const order = await Order.findOne({$and: [{ order_id }, { deletedAt: null }, {status: 'pickup' }]})
+    
+    if( !order){
+        res.status(404);
+        throw new ApiError(404, "Order not found");
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
         order.status = 'onway';
+        order.onway_time = Date.now();
         const orderSave = await order.save({ validateBeforeSave: false, session });
 
         riderOrder.status = 'onway';
@@ -608,6 +628,7 @@ const deliveredOrder = asyncHandler(async (req, res) => {
     session.startTransaction();
     try {
         order.status = 'delivered';
+        order.delivery_time = Date.now();
         const orderSave = await order.save({ validateBeforeSave: false, session })
 
         riderOrder.status = 'delivered';
@@ -833,5 +854,202 @@ const getpreTime = asyncHandler(async (req, res) => {
     }
 });
 
+const getRiderOrders = asyncHandler(async (req, res) => {
+    const { uid } = req.user;
 
-export { createRider, isActive, updateCardBack, updateCardFront, updateLicenseFront, updateLicenseBack, switchSession, updateRider, getRiders, pickupOrder, onwayOrder, deliveredOrder, riderTime, adminriderTime, getpreTime } 
+    const rider = await Rider.findOne({ user_id: uid, deletedAt: null });
+
+    if (!rider) {
+        throw new ApiError(404, "Rider not found");
+    }
+
+    const orders = await RiderOrder.aggregate([
+        {
+            $match: {
+                rider_id: uid,
+                deletedAt: null,
+                status: { $in: ['fetching', 'pickup', 'onway'] },
+                createdAt: { $gte: startOfDay, $lte: endOfDay }
+            }
+        },
+        {
+            $lookup: {
+                from: "subcities",
+                localField: "area_id",
+                foreignField: "_id",
+                as: "area"
+            }
+        },
+        {
+            $lookup: {  // Lookup against the "orders" collection
+                from: "orders",
+                localField: "order_id", // Assuming you have order_id in RiderOrder
+                foreignField: "order_id",
+                as: "order"
+            }
+        },
+        { $unwind: "$order" }, // Unwind the "order" array
+        {
+            $addFields: {
+                area_name: "$area.name",
+                order_status: "$order.status" // Add the order status
+            }
+        },
+        {
+            $project: {
+                area: 0,
+                __v: 0,
+                updatedAt: 0,
+                deletedAt: 0,
+                _id: 0,
+                rider_id: 0,
+                area_id: 0,
+                status: 0,
+                totalAmount: 0,
+                pickup_time: 0,
+                order: 0, // Exclude the entire "order" document
+            }
+        },
+        {
+            $sort: {
+                createdAt: -1
+            }
+        }
+    ]);
+
+    if (!orders || orders.length === 0) {
+        return res.status(404).json(new ApiResponse(404, null, "No orders found"));
+    }
+
+    res.status(200).json(new ApiResponse(200, orders, "Orders fetched successfully"));
+});
+
+const getRiderhistory = asyncHandler(async (req, res) => {
+    const {uid} = req.user;
+
+    const rider = await Rider.findOne({ $and: [{ user_id: uid }, { deletedAt: null }] });
+
+    if( !rider){
+        res.status(404);
+        throw new ApiError(404, "Rider not found");
+    }
+
+    const orders = await RiderOrder.aggregate([
+        {
+            $match: {
+                rider_id: uid,
+                deletedAt: null,
+                status: { $in: ['delivered', 'cancelled'] },
+                createdAt: { $gte: startOfDay, $lte: endOfDay }
+            }
+        },
+        {
+            $project: {
+                __v: 0,
+                updatedAt: 0,
+                deletedAt: 0,
+                _id: 0,
+                rider_id: 0,
+                area_id: 0,
+                pickup_time: 0,
+            }
+        },
+        {
+            $sort: {
+                createdAt: -1
+            }
+        }
+    ])
+
+    if( !orders || orders.length === 0){
+        return res.status(404).json(
+            new ApiResponse(404, null, "No orders found")
+        )
+    }
+
+    res.status(200).json(
+        new ApiResponse(200, orders, "Orders fetched successfully")
+    )
+
+})
+
+const getSingleOrder = asyncHandler(async (req, res) => {
+    const { order_id } = req.params;
+    const { uid } = req.user;
+
+    if (!order_id) {
+        throw new ApiError(400, "Order ID is required");
+    }
+
+    const order = await RiderOrder.findOne({ order_id, rider_id: uid, deletedAt: null });
+
+    if (!order) {
+        throw new ApiError(404, "Order not found");
+    }
+
+    const orderDetails = await Order.aggregate([
+        { $match: { order_id, deletedAt: null } },
+        {
+            $lookup: {
+                from: 'ordersdetails',
+                let: { order_id: "$order_id" },
+                pipeline: [
+                    { $match: { $expr: { $eq: ["$order_id", "$$order_id"] } } },
+                    {
+                        $lookup: {
+                            from: "products",
+                            localField: "pro_id",
+                            foreignField: "_id",
+                            as: "product"
+                        }
+                    },
+                    { $unwind: "$product" }, // Unwind after initial product lookup
+                    {
+                        $lookup: {  // Sub-pipeline to get unit name
+                            from: "units", // Assuming your units collection is named "units"
+                            localField: "product.unit_id",
+                            foreignField: "_id",
+                            as: "unit"
+                        }
+                    },
+                    { $unwind: { path: "$unit", preserveNullAndEmptyArrays: true } }, // Important: Handle cases where unit_id might be null
+                    {
+                        $project: {
+                            name: "$product.name",
+                            img: "$product.img",
+                            qty: 1,
+                            unit_name: "$unit.name" // Add unit name to the output. Handle the case where unit is null.
+                        }
+                    }
+                ],
+                as: 'orderDetails'
+            }
+        },
+        {
+            $project: {
+                __v: 0,
+                updatedAt: 0,
+                deletedAt: 0,
+                _id: 0,
+                user_id: 0,
+                area_id: 0,
+                rider_id: 0,
+                delivered_charges: 0,
+                createdAt: 0,
+                reason: 0,
+                onway_time: 0,
+                ready_time: 0,
+                preparing_time: 0,
+                cancelled_by: 0
+            }
+        }
+    ]);
+
+    if (orderDetails.length === 0) {
+        throw new ApiError(404, "Order details not found");
+    }
+
+    res.status(200).json(new ApiResponse(200, orderDetails, "Order fetched successfully"));
+});
+
+export { createRider, isActive, updateCardBack, updateCardFront, updateLicenseFront, updateLicenseBack, switchSession, updateRider, getRiders, pickupOrder, onwayOrder, deliveredOrder, riderTime, adminriderTime, getpreTime, getRiderOrders, getRiderhistory, getSingleOrder } 
