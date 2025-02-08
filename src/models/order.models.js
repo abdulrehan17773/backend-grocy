@@ -9,6 +9,10 @@ const orderSchema = new Schema({
         required: true,
         index: true
     },
+    username: {
+        type: String,
+        required: true
+    },
     order_id:{
         type: String,
         required: true,
@@ -87,7 +91,6 @@ const orderSchema = new Schema({
         type: Date,
         default: null
     }
-
 }, {timestamps: true})
 
 orderSchema.plugin(aggregatePaginate);

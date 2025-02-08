@@ -3,6 +3,7 @@ import { ApiError } from "../utils/ApiError.js"
 import ApiResponse from "../utils/ApiResponse.js"
 import { Order } from "../models/order.models.js"
 import { OrdersDetails } from "../models/orderDetails.models.js"
+import { User } from "../models/user.models.js"
 import { Product } from "../models/product.models.js"
 import { SubCity } from "../models/subCity.models.js"
 import { City } from "../models/city.models.js"
@@ -78,12 +79,23 @@ const checkRider = async (order_id, area_id, totalAmount = 0) => {
 };
 
 const placeOrder = asyncHandler(async (req, res) => {
-    const { user_id, address, phone, area_id, note, delivery_charges, total_price, cart } = req.body;
+    const {address, phone, area_id, note, delivery_charges, total_price, cart } = req.body;
+    const {uid} = req.user;
 
-    if ([user_id, address, phone, area_id, total_price, cart].some(item => !item)) {
+    if ([address, phone, area_id, total_price, cart].some(item => !item)) {
         res.status(400);
         throw new ApiError(400, "All fields are required");
     }
+
+    const userData = await User.findOne({uid, deletedAt: null}).select('fullname');
+
+    if( !userData){
+        res.status(404);
+        throw new ApiError(404, "User not found");
+    }
+
+    const user_id = uid;
+    const username = userData.fullname;
 
     const order_id = "ORD_" + (Date.now().toString(36) + Math.random().toString(36)).slice(11, 18);
 
@@ -107,7 +119,7 @@ const placeOrder = asyncHandler(async (req, res) => {
     session.startTransaction(); // Start the transaction
 
     try {
-        const order = await Order.create([{ user_id, order_id, address, phone, area_id, note,delivery_charges, total_price }], { session }); // Pass the session
+        const order = await Order.create([{ user_id, username, order_id, address, phone, area_id, note,delivery_charges, total_price }], { session }); // Pass the session
 
         if (!order || order.length === 0) { // Check if order creation failed
             await session.abortTransaction();
