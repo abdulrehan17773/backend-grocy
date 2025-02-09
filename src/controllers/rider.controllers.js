@@ -15,7 +15,11 @@ import sendEmail from "../utils/email.js";
 
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0); // Set to the beginning of the day
-    
+
+    // Calculate the start of the last three days
+    const threeDaysAgo = new Date(startOfDay);
+    threeDaysAgo.setDate(startOfDay.getDate() - 3);
+
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999); // Set to the end of the day
     
@@ -1052,4 +1056,52 @@ const getSingleOrder = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, orderDetails, "Order fetched successfully"));
 });
 
-export { createRider, isActive, updateCardBack, updateCardFront, updateLicenseFront, updateLicenseBack, switchSession, updateRider, getRiders, pickupOrder, onwayOrder, deliveredOrder, riderTime, adminriderTime, getpreTime, getRiderOrders, getRiderhistory, getSingleOrder } 
+const adminGerRiderOrders = asyncHandler(async (req, res) => {
+    const {rider_id} = req.body
+
+    const rider = await Rider.findOne({ $and: [{ user_id: rider_id }, { deletedAt: null }] });
+
+    if( !rider){
+        res.status(404);
+        throw new ApiError(404, "Rider not found");
+    }
+
+    const orders = await RiderOrder.aggregate([
+        {
+            $match: {
+                rider_id: rider_id,
+                deletedAt: null,
+                createdAt: { $gte: threeDaysAgo, $lte: endOfDay }
+            }
+        },
+        {
+            $project: {
+                __v: 0,
+                updatedAt: 0,
+                deletedAt: 0,
+                _id: 0,
+                rider_id: 0,
+                area_id: 0,
+                pickup_time: 0,
+            }
+        },
+        {
+            $sort: {
+                createdAt: -1
+            }
+        }
+    ])
+
+    if( !orders || orders.length === 0){
+        return res.status(404).json(
+            new ApiResponse(404, null, "No orders found")
+        )
+    }
+
+    res.status(200).json(
+        new ApiResponse(200, orders, "Orders fetched successfully")
+    )
+
+})
+
+export { createRider, isActive, updateCardBack, updateCardFront, updateLicenseFront, updateLicenseBack, switchSession, updateRider, getRiders, pickupOrder, onwayOrder, deliveredOrder, riderTime, adminriderTime, getpreTime, getRiderOrders, getRiderhistory, getSingleOrder, adminGerRiderOrders } 
