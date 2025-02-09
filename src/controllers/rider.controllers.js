@@ -1053,7 +1053,7 @@ const getSingleOrder = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Order details not found");
     }
 
-    res.status(200).json(new ApiResponse(200, orderDetails, "Order fetched successfully"));
+    res.status(200).json(new ApiResponse(200, orderDetails, "Order Details fetched successfully"));
 });
 
 const adminGerRiderOrders = asyncHandler(async (req, res) => {

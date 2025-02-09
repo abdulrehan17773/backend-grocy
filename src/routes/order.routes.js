@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { checkAuth, checkAdmin } from "../middlewares/checkAuth.middleware.js";
-import { placeOrder, getOrder, cancelOrder, orderDetails, preparingOrder, readyOrder, rejectOrder, updateRider } from "../controllers/order.controllers.js"
+import { placeOrder, getOrder, cancelOrder, orderDetails, preparingOrder, readyOrder, rejectOrder, updateRider, adminGetAllOrder, adminOrderDetails } from "../controllers/order.controllers.js"
 
 
 const orderRouter = Router();
@@ -14,5 +14,7 @@ orderRouter.route("/preparing").patch(preparingOrder);
 orderRouter.route("/ready").patch(readyOrder);
 orderRouter.route("/reject").patch(rejectOrder);
 orderRouter.route("/updaterider").patch(updateRider);
+orderRouter.route("/admingetallorder").get(adminGetAllOrder);
+orderRouter.route("/adminorderdetails/:order_id").get(adminOrderDetails);
 
 export {orderRouter};

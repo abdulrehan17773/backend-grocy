@@ -557,4 +557,158 @@ const updateRider = asyncHandler(async (req, res) => {
     )
 })
 
-export {placeOrder, getOrder, cancelOrder, orderDetails, preparingOrder, readyOrder, rejectOrder, updateRider};
+const adminGetAllOrder = asyncHandler(async (req, res) => {
+    const {page = 1, status, limit = 10} = req.body;
+
+    let newStatus = {status: status};
+    if( !status){
+        newStatus = {}
+    }
+
+    const aggregate = Order.aggregate([ // Store the aggregation pipeline
+        {
+            $match: {
+                $and: [{ deletedAt: null },  newStatus ]
+            }
+        },
+        {
+            $sort: {
+                createdAt: -1
+            }
+        },
+        {
+            $project: {
+                order_id: 1,
+                address: 1,
+                phone: 1,
+                status: 1,
+                total_price: 1,
+                _id: 0 // Exclude _id for cleaner response
+            }
+        }
+    ])
+
+    const options = {
+        page: parseInt(page),
+        limit: parseInt(limit),
+    };
+
+    const result = await Order.aggregatePaginate(aggregate, options);
+
+    const newData = {
+        totalDocs: result.totalDocs,
+        limit: result.limit,
+        page: result.page,
+        totalPages: result.totalPages,
+        pagingCounter: result.pagingCounter,
+        hasPrevPage: result.hasPrevPage,
+        hasNextPage: result.hasNextPage,
+        prevPage: result.prevPage,
+        nextPage: result.nextPage
+    }
+
+    res.status(200).json(
+        new ApiResponse(200, {data: result.docs, newData}, "Order fetched successfully")
+    )
+})
+
+const adminOrderDetails = asyncHandler(async (req, res) => {
+    const { order_id } = req.params;
+
+    if (!order_id) {
+        throw new ApiError(400, "Order ID is required");
+    }
+
+    const orderDetails = await Order.aggregate([
+        { $match: { order_id, deletedAt: null } },
+        {
+            $lookup: {
+                from: 'ordersdetails',
+                let: { order_id: "$order_id" },
+                pipeline: [
+                    { $match: { $expr: { $eq: ["$order_id", "$$order_id"] } } },
+                    {
+                        $lookup: {
+                            from: "products",
+                            localField: "pro_id",
+                            foreignField: "_id",
+                            as: "product"
+                        }
+                    },
+                    { $unwind: "$product" },
+                    {
+                        $lookup: {
+                            from: "units",
+                            localField: "product.unit_id",
+                            foreignField: "_id",
+                            as: "unit"
+                        }
+                    },
+                    { $unwind: { path: "$unit", preserveNullAndEmptyArrays: true } },
+                    {
+                        $project: {
+                            _id: 0, // Project _id out here at the earliest stage
+                            name: "$product.name",
+                            img: "$product.img",
+                            qty: 1, // You might want to get this from ordersdetails
+                            unit_name: "$unit.name",
+                            product_id: "$product._id" // Include product_id if needed
+                        }
+                    }
+                ],
+                as: 'orderDetails'
+            }
+        },
+        {
+            $lookup: {
+                from: 'riderorders',
+                let: { order_id: "$order_id" },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: { $eq: ["$order_id", "$$order_id"] }
+                        }
+                    },
+                    {
+                        $lookup: {
+                            from: 'riders',
+                            localField: 'rider_id',
+                            foreignField: 'user_id',
+                            as: 'riderDetails'
+                        }
+                    },
+                    { $unwind: { path: '$riderDetails', preserveNullAndEmptyArrays: true } },
+                    {
+                        $project: {
+                            _id: 0,
+                            name: '$riderDetails.name',
+                            rider_id: '$riderDetails.user_id',
+                            phone: '$riderDetails.phone',
+                        }
+                    }
+                ],
+                as: 'riderorder'
+            }
+        },
+        { $unwind: { path: "$riderorder", preserveNullAndEmptyArrays: true } },
+        {
+            $project: {
+                __v: 0,
+                updatedAt: 0,
+                deletedAt: 0,
+                _id: 0, // Project _id out here
+                user_id: 0,
+                area_id: 0,
+                createdAt: 0,
+            }
+        }
+    ]);
+
+    if (orderDetails.length === 0) {
+        throw new ApiError(404, "Order details not found");
+    }
+
+    res.status(200).json(new ApiResponse(200, orderDetails[0], "Order fetched successfully")); // Send the first element since it's an array
+});
+
+export {placeOrder, getOrder, cancelOrder, orderDetails, preparingOrder, readyOrder, rejectOrder, updateRider, adminGetAllOrder, adminOrderDetails};
