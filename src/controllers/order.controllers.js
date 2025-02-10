@@ -9,6 +9,7 @@ import { SubCity } from "../models/subCity.models.js"
 import { City } from "../models/city.models.js"
 import { RiderOrder } from "../models/riderOrder.models.js"
 import { Rider } from "../models/rider.models.js"
+import { Payment } from "../models/payment.models.js"
 import mongoose from "mongoose";
 
 
@@ -711,4 +712,107 @@ const adminOrderDetails = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, orderDetails[0], "Order fetched successfully")); // Send the first element since it's an array
 });
 
-export {placeOrder, getOrder, cancelOrder, orderDetails, preparingOrder, readyOrder, rejectOrder, updateRider, adminGetAllOrder, adminOrderDetails};
+const clearOrderPayments = asyncHandler(async (req, res) => {
+    const { order_id, amount } = req.body;
+
+    if (!order_id || !amount) {
+        res.status(400);
+        throw new ApiError(400, "Missing Data");
+    }
+
+    const order = await Order.findOne({ $and: [{ order_id }, { deletedAt: null }] });
+
+    if (!order) {
+        res.status(404);
+        throw new ApiError(404, "Order not found");
+    }
+
+    const riderOrder = await RiderOrder.findOne({ $and: [{ order_id }, { status: 'delivered' }, { deletedAt: null }] });
+
+    if (!riderOrder) {
+        res.status(404);
+        throw new ApiError(404, "Rider not found");
+    }
+
+    if (riderOrder.totalAmount < amount) {
+        res.status(401);
+        throw new ApiError(401, "Insufficient amount");
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        
+        const finalAmount = riderOrder.totalAmount - amount;
+        riderOrder.totalAmount = finalAmount;
+        
+        const paid = await riderOrder.save({ session, validateBeforeSave: false });
+        
+        if (!paid) {
+            res.status(500);
+            throw new ApiError(500, "Something went wrong saving the rider order"); // More specific error message
+        }
+
+        const payment = await Payment.create([{ order_id, rider_id: riderOrder.rider_id , amount}]);
+
+        if( !payment){
+            res.status(500);
+            throw new ApiError(500, "Something went wrong creating the payment")
+        }
+        
+        await session.commitTransaction();  
+        session.endSession();
+
+        res.status(200).json(
+            new ApiResponse(200, finalAmount, "Payment cleared successfully")
+        );
+    } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+        console.error("Transaction Error:", error); // Log the actual error for debugging
+        res.status(500);
+        throw new ApiError(500, "Something went wrong during payment clearing"); // More general error message
+    }
+});
+
+const getorderPayments = asyncHandler(async (req, res) => {
+    const { page = 1, limit = 10 } = req.body; // No order_id needed here
+
+    try {
+        const aggregate = Payment.aggregate([
+            { $match: { deletedAt: null } },
+            { $project: { _id: 0, updatedAt: 0, deletedAt: 0, __v: 0 } }
+        ]);
+
+
+        const result = await Payment.aggregatePaginate(aggregate, {
+            page: parseInt(page),
+            limit: parseInt(limit),
+        });
+
+
+        const newData = {
+            totalDocs: result.totalDocs,
+            limit: result.limit,
+            page: result.page,
+            totalPages: result.totalPages,
+            pagingCounter: result.pagingCounter,
+            hasPrevPage: result.hasPrevPage,
+            hasNextPage: result.hasNextPage,
+            prevPage: result.prevPage,
+            nextPage: result.nextPage
+        };
+
+        res.status(200).json(
+            new ApiResponse(200, { data: result.docs, newData }, "Payments fetched successfully")
+        );
+
+    } catch (error) {
+        console.error("Aggregation Error:", error);
+        res.status(500);
+        throw new ApiError(500, "Error fetching payments");
+    }
+});
+
+export {placeOrder, getOrder, cancelOrder, orderDetails, preparingOrder, readyOrder, rejectOrder, updateRider, adminGetAllOrder, adminOrderDetails, clearOrderPayments, getorderPayments};

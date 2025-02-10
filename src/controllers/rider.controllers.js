@@ -612,7 +612,12 @@ const onwayOrder = asyncHandler(async (req, res) => {
 })
 
 const deliveredOrder = asyncHandler(async (req, res) => {
-    const { order_id } = req.body;
+    const { order_id, paid_by } = req.body;
+
+    if(!order_id || !paid_by){
+        res.status(400);
+        throw new ApiError(400, "All fields are required");
+    }
 
     const riderOrder = await RiderOrder.findOne({ $and: [{ order_id }, { deletedAt: null}, {status: 'onway'}]})
 
@@ -632,6 +637,7 @@ const deliveredOrder = asyncHandler(async (req, res) => {
     session.startTransaction();
     try {
         order.status = 'delivered';
+        order.paid_by = paid_by;
         order.delivery_time = Date.now();
         const orderSave = await order.save({ validateBeforeSave: false, session })
 
