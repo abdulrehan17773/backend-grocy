@@ -8,6 +8,7 @@ import { RiderOrder } from "../models/riderOrder.models.js";
 import { Order } from "../models/order.models.js";
 import { Shift } from "../models/shift.models.js";
 import { Setting } from "../models/setting.models.js";
+import { Payment } from "../models/payment.models.js"
 import mongoose from "mongoose";
 import sendEmail from "../utils/email.js";
 
@@ -1110,4 +1111,74 @@ const adminGerRiderOrders = asyncHandler(async (req, res) => {
 
 })
 
-export { createRider, isActive, updateCardBack, updateCardFront, updateLicenseFront, updateLicenseBack, switchSession, updateRider, getRiders, pickupOrder, onwayOrder, deliveredOrder, riderTime, adminriderTime, getpreTime, getRiderOrders, getRiderhistory, getSingleOrder, adminGerRiderOrders } 
+const riderAdmin = asyncHandler(async (req, res) => {
+    try {
+        const { uid } = req.user;
+
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+
+        const endOfDay = new Date();
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const threeDaysAgo = new Date();
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+        threeDaysAgo.setHours(0, 0, 0, 0);
+
+
+        const deliveredOrderCount = await RiderOrder.countDocuments({
+            rider_id: uid,
+            deletedAt: null,
+            status: 'delivered',
+            createdAt: { $gte: startOfDay, $lte: endOfDay }
+        });
+
+        const cancelledOrderCount = await RiderOrder.countDocuments({
+            rider_id: uid,
+            deletedAt: null,
+            status: 'cancelled',
+            createdAt: { $gte: startOfDay, $lte: endOfDay }
+        });
+
+        const fetchingOrderCount = await RiderOrder.countDocuments({
+            rider_id: uid,
+            deletedAt: null,
+            status: { $in: ['fetching', 'pickup', 'onway'] },
+            createdAt: { $gte: startOfDay, $lte: endOfDay }
+        });
+
+        const paidOrderPayments = await Payment.find({
+            rider_id: uid,
+            deletedAt: null,
+        }).sort({ createdAt: -1 }).limit(10).select("order_id createdAt amount -_id");
+
+        const ordersPayment = await RiderOrder.aggregate([
+            {
+                $match: {
+                    rider_id: uid,
+                    deletedAt: null,
+                    status: 'delivered',
+                    createdAt: { $gte: threeDaysAgo, $lte: endOfDay }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalAmount: { $sum: "$totalAmount" }
+                }
+            }
+        ]);
+
+        const totalPaymentAmount = ordersPayment.length > 0 ? ordersPayment[0].totalAmount : 0;
+
+        res.status(200).json(
+            new ApiResponse(200, { deliveredOrderCount, fetchingOrderCount, cancelledOrderCount, totalPaymentAmount, paidOrderPayments }, "data fetched successfully")
+        );
+
+    } catch (error) {
+        console.error("Error in riderAdmin:", error); // Log the actual error
+        res.status(500).json(new ApiError(500, "Error fetching data")); // Send a generic error response
+    }
+});
+
+export { createRider, isActive, updateCardBack, updateCardFront, updateLicenseFront, updateLicenseBack, switchSession, updateRider, getRiders, pickupOrder, onwayOrder, deliveredOrder, riderTime, adminriderTime, getpreTime, getRiderOrders, getRiderhistory, getSingleOrder, adminGerRiderOrders, riderAdmin } 
