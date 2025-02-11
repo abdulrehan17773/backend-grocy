@@ -1,7 +1,7 @@
 import { Router } from "express"
 import { checkAuth, checkRider, checkAdmin } from "../middlewares/checkAuth.middleware.js"
 import { upload } from "../middlewares/multer.middleware.js"
-import { createRider, isActive, updateLicenseFront, updateLicenseBack, updateCardFront, updateCardBack, switchSession, updateRider, getRiders,pickupOrder, onwayOrder, deliveredOrder, riderTime, adminriderTime, getpreTime, getRiderOrders, getRiderhistory, getSingleOrder, adminGerRiderOrders, riderAdmin } from "../controllers/rider.controllers.js"
+import { createRider, isActive, updateLicenseFront, updateLicenseBack, updateCardFront, updateCardBack, switchSession, updateRider, getRiders,pickupOrder, onwayOrder, deliveredOrder, riderTime, adminriderTime, getpreTime, getRiderOrders, getRiderhistory, getSingleOrder, adminGerRiderOrders, riderAdmin, adminDashboard, deliveredOrdersChart, topSellingProductsChart } from "../controllers/rider.controllers.js"
 
 const riderRouter = Router();
 
@@ -23,6 +23,9 @@ riderRouter.route( "/idcardback").patch(checkAdmin,upload.single("idCardBack"), 
 riderRouter.route( "/updaterider").patch(checkAdmin, updateRider);
 riderRouter.route( "/getall").get(checkAdmin, getRiders);
 riderRouter.route( "/getadminriderorder").get(checkAdmin, adminGerRiderOrders);
+riderRouter.route( "/admin/dashboard").get(checkAdmin, adminDashboard);
+riderRouter.route( "/admin/chart").get(checkAdmin, deliveredOrdersChart);
+riderRouter.route( "/admin/topselleing").get(checkAdmin, topSellingProductsChart);
 riderRouter.use(checkRider);
 riderRouter.route( "/rideradmin").get(riderAdmin);
 riderRouter.route( "/switchsession").patch(switchSession);

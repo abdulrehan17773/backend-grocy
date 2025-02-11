@@ -1181,4 +1181,170 @@ const riderAdmin = asyncHandler(async (req, res) => {
     }
 });
 
-export { createRider, isActive, updateCardBack, updateCardFront, updateLicenseFront, updateLicenseBack, switchSession, updateRider, getRiders, pickupOrder, onwayOrder, deliveredOrder, riderTime, adminriderTime, getpreTime, getRiderOrders, getRiderhistory, getSingleOrder, adminGerRiderOrders, riderAdmin } 
+const adminDashboard = asyncHandler(async (req, res) => {
+    try {
+        const orderCounts = {};
+        let totalOrdersAmount = 0;
+
+        const statuses = ['delivered', 'cancelled', 'processing', 'ready', 'pickup', 'preparing', 'onway']; // Removed 'pending'
+
+        for (const status of statuses) {
+            const result = await Order.aggregate([
+                {
+                    $match: {
+                        createdAt: { $gte: startOfDay, $lte: endOfDay },
+                        status: status,
+                        deletedAt: null // Handle soft deletes
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        count: { $sum: 1 },
+                        totalAmount: { $sum: "$total_price" }
+                    }
+                }
+            ]);
+
+            orderCounts[status] = result.length > 0 ? result[0].count : 0;
+            totalOrdersAmount += result.length > 0 ? result[0].totalAmount : 0;
+        }
+
+
+        const activeRidersCount = await Rider.countDocuments({
+            is_online: true,
+            is_active: true,
+            deletedAt: null 
+        });
+
+        res.status(200).json(
+            new ApiResponse(200, {
+                ...orderCounts,
+                totalOrdersAmount,
+                activeRidersCount
+            }, "Data fetched successfully")
+        );
+
+    } catch (error) {
+        console.error("Error in adminDashboard:", error);
+        res.status(500).json(new ApiError(500, "Error fetching data"));
+    }
+});
+
+const deliveredOrdersChart = asyncHandler(async (req, res) => {
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Start of today
+
+        const sixDaysAgo = new Date();
+        sixDaysAgo.setDate(today.getDate() - 6);
+        sixDaysAgo.setHours(0, 0, 0, 0); // Start of 6 days ago
+
+        const dailyCounts = [];
+
+        for (let i = 0; i < 7; i++) { // Loop for 7 days (including today)
+            const currentDate = new Date(sixDaysAgo); // Create a new date object for each day
+            currentDate.setDate(sixDaysAgo.getDate() + i); // Increment the date
+            currentDate.setHours(0, 0, 0, 0); // Start of the current day
+            const nextDay = new Date(currentDate);
+            nextDay.setDate(currentDate.getDate() + 1);
+            nextDay.setHours(0, 0, 0, 0); // Start of the next day
+
+            const count = await Order.countDocuments({
+                status: 'delivered',
+                createdAt: { $gte: currentDate, $lt: nextDay }, // Use $lt for the end of the day
+                deletedAt: null // Handle soft deletes
+            });
+
+            dailyCounts.push({
+                date: currentDate.toISOString().slice(0, 10), // Format date as YYYY-MM-DD
+                count: count
+            });
+        }
+
+        res.status(200).json(
+            new ApiResponse(200, dailyCounts, "Delivered orders chart data fetched successfully")
+        );
+
+    } catch (error) {
+        console.error("Error in deliveredOrdersChart:", error);
+        res.status(500).json(new ApiError(500, "Error fetching chart data"));
+    }
+});
+
+const topSellingProductsChart = asyncHandler(async (req, res) => {
+    try {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+        const topProducts = await Order.aggregate([
+            {
+                $match: {
+                    status: "delivered",
+                    deletedAt: null,
+                    createdAt: { $gte: thirtyDaysAgo }
+                }
+            },
+            {
+                $lookup: {
+                    from: "ordersdetails",
+                    let: { order_id: "$order_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $eq: ["$order_id", "$$order_id"] },
+                                deletedAt: null
+                            }
+                        },
+                        {
+                            $lookup: {
+                                from: "products",
+                                localField: "pro_id",
+                                foreignField: "_id",
+                                as: "product"
+                            }
+                        },
+                        { $unwind: "$product" }
+                    ],
+                    as: "orderDetailsWithProduct"
+                }
+            },
+            { $unwind: "$orderDetailsWithProduct" },
+            {
+                $group: {
+                    _id: "$orderDetailsWithProduct.product._id",
+                    productName: { $first: "$orderDetailsWithProduct.product.name" },
+                    totalQuantitySold: { $sum: "$orderDetailsWithProduct.qty" },
+                    totalRevenue: { $sum: { $multiply: ["$orderDetailsWithProduct.qty", "$orderDetailsWithProduct.price"] } }
+                }
+            },
+            {
+                $project: { // Project only the required fields
+                    _id: 0, // Exclude _id
+                    productName: 1,
+                    totalQuantitySold: 1,
+                    totalRevenue: 1
+                }
+            },
+            {
+                $sort: { totalQuantitySold: -1 }
+            },
+            {
+                $limit: 5
+            }
+        ]);
+
+        console.log("top", topProducts);
+
+        res.status(200).json(
+            new ApiResponse(200, topProducts, "Top selling products data fetched successfully")
+        );
+
+    } catch (error) {
+        console.error("Error in topSellingProductsChart:", error);
+        res.status(500).json(new ApiError(500, "Error fetching chart data"));
+    }
+});
+
+export { createRider, isActive, updateCardBack, updateCardFront, updateLicenseFront, updateLicenseBack, switchSession, updateRider, getRiders, pickupOrder, onwayOrder, deliveredOrder, riderTime, adminriderTime, getpreTime, getRiderOrders, getRiderhistory, getSingleOrder, adminGerRiderOrders, riderAdmin, adminDashboard, deliveredOrdersChart, topSellingProductsChart } 
