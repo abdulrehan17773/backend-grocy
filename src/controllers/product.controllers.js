@@ -8,94 +8,53 @@ import { handleUploadFile, deleteFileFromCloudinary } from "../utils/cloudinary.
 
 
 const getAll = asyncHandler(async (req, res) => {
-    const { featured, page = 1 } = req.body; // Get page and limit from query parameters
-    
-    let limit = 12
-
-    let is_f = {};
-    if (featured === 'true') { // Important: Check for the string "true"
-        is_f = { is_featured: true };
-        limit = 6;
-    }
-
-    const aggregate = Product.aggregate([ // Your aggregation pipeline
-        {
-            $match: {
-                $and: [
-                    { is_active: true },
-                    { deletedAt: null },
-                    is_f
-                ],
-            },
-        },
-        {
-            $lookup: {
-                from: "categories",
-                localField: "cat_id",
-                foreignField: "_id",
-                as: "category",
-            },
-        },
-        {
-            $unwind: "$category",
-        },
-        {
-            $lookup: {
-                from: "units",
-                localField: "unit_id",
-                foreignField: "_id",
-                as: "unit",
-            },
-        },
-        {
-            $unwind: "$unit",
-        },
-        {
-            $addFields: {
-                category_name: "$category.name",
-                unit_name: "$unit.name",
-            },
-        },
-        {
-            $project: {
-                unit: 0,
-                category: 0,
-                seller_id: 0,
-                __v: 0,
-                createdAt: 0,
-                updatedAt: 0,
-                deletedAt: 0,
-                is_active: 0,
-                is_featured: 0,
-                unit_id: 0,
-                qty: 0,
-                cost: 0,
-            },
-        },
-    ]);
-
-    const options = {
-        page: parseInt(page), // Parse page and limit to integers
-        limit: parseInt(limit),
-    };
 
     try {
-        const result = await Product.aggregatePaginate(aggregate, options); // Use aggregatePaginate
-
-        const newData = {
-            totalDocs: result.totalDocs,
-            limit: result.limit,
-            page: result.page,
-            totalPages: result.totalPages,
-            pagingCounter: result.pagingCounter,
-            hasPrevPage: result.hasPrevPage,
-            hasNextPage: result.hasNextPage,
-            prevPage: result.prevPage,
-            nextPage: result.nextPage
-        }
+        const products = await Product.aggregate([
+            {
+                $match: {
+                    $and: [
+                        { is_active: true },
+                        { deletedAt: null },
+                    ],
+                },
+            },
+            {
+                $lookup: {
+                    from: "units",
+                    localField: "unit_id",
+                    foreignField: "_id",
+                    as: "unit",
+                },
+            },
+            {
+                $unwind: "$unit",
+            },
+            {
+                $addFields: {
+                    category_name: "$category.name",
+                    unit_name: "$unit.name",
+                },
+            },
+            {
+                $project: {
+                    unit: 0,
+                    seller_id: 0,
+                    __v: 0,
+                    createdAt: 0,
+                    updatedAt: 0,
+                    deletedAt: 0,
+                    is_active: 0,
+                    is_featured: 0,
+                    unit_id: 0,
+                    qty: 0,
+                    cost: 0,
+                },
+            },
+        ]);
 
         res.status(200).json(
-            new ApiResponse(200, {data: result.docs, newData}, "Products fetched successfully")
+            new ApiResponse(200, { data: products }, "Products fetched successfully")
         );
     } catch (error) {
         console.error("Error fetching products:", error);
