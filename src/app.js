@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import handleError from './middlewares/handleError.middleware.js';
 
 // create express app
 const app = express();
@@ -41,5 +42,7 @@ app.use("/api/v1/cat", catRouter);
 app.use("/api/v1/pro", productRouter);
 app.use("/api/v1/order", orderRouter);
 app.use("/api/v1/rider", riderRouter);
+
+app.use(handleError)
 
 export { app };
